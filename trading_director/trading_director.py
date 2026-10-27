@@ -8,7 +8,10 @@ from order_executor.order_executor import OrderExecutor
 from notifications.notifications import NotificationService
 from events.events import DataEvent, SignalEvent, SizingEvent, OrderEvent, ExecutionEvent, PlacedPendingOrderEvent
 from utils.utils import Utils
+from platform_connector.platform_connector import PlatformConnector
 from typing import Dict, Callable
+import MetaTrader5 as mt5
+import traceback
 import queue
 import time
 
@@ -16,7 +19,8 @@ import time
 class TradingDirector():
     
     def __init__(self, events_queue: queue.Queue, data_provider: DataProvider, signal_generator: ISignalGenerator,
-                position_sizer: PositionSizer, risk_manager: RiskManager, order_executor: OrderExecutor, notification_service: NotificationService):
+                position_sizer: PositionSizer, risk_manager: RiskManager, order_executor: OrderExecutor, notification_service: NotificationService,
+                platform_connector: PlatformConnector = None):
         """
         Initializes the TradingDirector object.
 
@@ -28,6 +32,7 @@ class TradingDirector():
             risk_manager (RiskManager): The risk manager object.
             order_executor (OrderExecutor): The order executor object.
             notification_service (NotificationService): The notification service object.
+            platform_connector (PlatformConnector, optional): Used to check and restore the connection with MT5.
         """
         self.events_queue = events_queue
         
@@ -38,9 +43,19 @@ class TradingDirector():
         self.RISK_MANAGER = risk_manager
         self.ORDER_EXECUTOR = order_executor
         self.NOTIFICATIONS = notification_service
+        self.PLATFORM_CONNECTOR = platform_connector
 
         # Controlador de trading
         self.continue_trading: bool = True
+
+        # Control de errores: si hay demasiados errores seguidos detenemos el Framework
+        self.consecutive_errors: int = 0
+        self.max_consecutive_errors: int = 20
+
+        # Control de la conexión con MT5 (se comprueba cada connection_check_seconds)
+        self.connection_check_seconds: float = 5.0
+        self._last_connection_check: float = 0.0
+        self._connected: bool = True
 
         # Creación del event handler
         self.event_handler: Dict[str, Callable] = {
@@ -173,6 +188,53 @@ class TradingDirector():
         print(f"{Utils.dateprint()} - ERROR: Recibido evento desconocido. Terminando ejecución del Framework. Evento: {event}")
         self.continue_trading = False
 
+    def _check_platform_connection(self) -> bool:
+        """
+        Checks every few seconds that MT5 is connected and tries to reconnect if it is not.
+
+        Returns:
+            bool: True if the platform is connected, False otherwise.
+        """
+        if self.PLATFORM_CONNECTOR is None or time.time() - self._last_connection_check < self.connection_check_seconds:
+            return self._connected
+
+        self._last_connection_check = time.time()
+        connected = self.PLATFORM_CONNECTOR.ensure_connection()
+
+        # Avisamos solo cuando cambia el estado de la conexión
+        if connected and not self._connected:
+            self.NOTIFICATIONS.send_notification(title="CONEXIÓN RESTABLECIDA", message=f"{Utils.dateprint()} - La conexión con MT5 se ha restablecido")
+        elif not connected and self._connected:
+            self.NOTIFICATIONS.send_notification(title="CONEXIÓN PERDIDA", message=f"{Utils.dateprint()} - Se ha perdido la conexión con MT5. Reintentando...")
+
+        self._connected = connected
+        return connected
+
+    def _handle_loop_exception(self, exception: Exception) -> None:
+        """
+        Handles an unexpected error in the main loop without stopping the Framework,
+        unless there are too many consecutive errors.
+
+        Args:
+            exception (Exception): The exception raised inside the main loop.
+        """
+        self.consecutive_errors += 1
+        print(f"{Utils.dateprint()} - ERROR inesperado en el bucle principal ({self.consecutive_errors}/{self.max_consecutive_errors}): {exception}")
+        # chain=False: sin el "During handling of queue.Empty..." que no aporta nada
+        traceback.print_exception(type(exception), exception, exception.__traceback__, chain=False)
+
+        # Notificamos solo el primer error de una racha para no saturar Telegram
+        if self.consecutive_errors == 1:
+            self.NOTIFICATIONS.send_notification(title="ERROR EN EL FRAMEWORK", message=f"{Utils.dateprint()} - {type(exception).__name__}: {exception}")
+
+        if self.consecutive_errors >= self.max_consecutive_errors:
+            print(f"{Utils.dateprint()} - ERROR: Demasiados errores seguidos. Deteniendo el Framework")
+            self.NOTIFICATIONS.send_notification(title="FRAMEWORK DETENIDO", message=f"{Utils.dateprint()} - Detenido tras {self.consecutive_errors} errores seguidos. Último error: {exception}")
+            self.continue_trading = False
+
+        # Pausa para no repetir el mismo error cientos de veces por segundo
+        time.sleep(1)
+
     def execute(self) -> None:
         """
         Executes the main trading loop.
@@ -190,20 +252,42 @@ class TradingDirector():
         None
         """
         # Definición del bucle principal
-        while self.continue_trading:
-            try:
-                event = self.events_queue.get(block=False)    # Recordar que es una cola FIFO
-            
-            except queue.Empty:
-                self.DATA_PROVIDER.check_for_new_data()
-            
-            else:
-                if event is not None:
-                    handler = self.event_handler.get(event.event_type, self._handle_unknown_event)
-                    handler(event)
-                else:
-                    self._handle_none_event(event)
+        try:
+            while self.continue_trading:
+                try:
+                    # Si no hay conexión con MT5 esperamos antes de volver a intentarlo
+                    if not self._check_platform_connection():
+                        time.sleep(1)
+                        continue
 
-            time.sleep(0.01)
-        
+                    try:
+                        event = self.events_queue.get(block=False)    # Recordar que es una cola FIFO
+
+                    except queue.Empty:
+                        self.DATA_PROVIDER.check_for_new_data()
+
+                    else:
+                        if event is not None:
+                            handler = self.event_handler.get(event.event_type, self._handle_unknown_event)
+                            handler(event)
+                        else:
+                            self._handle_none_event(event)
+
+                except Exception as e:
+                    # Un error inesperado no detiene el Framework
+                    self._handle_loop_exception(e)
+
+                else:
+                    self.consecutive_errors = 0
+
+                time.sleep(0.01)
+
+        except KeyboardInterrupt:
+            # Cierre ordenado con Ctrl+C
+            print(f"{Utils.dateprint()} - Framework detenido manualmente (Ctrl+C)")
+            self.NOTIFICATIONS.send_notification(title="FRAMEWORK DETENIDO", message=f"{Utils.dateprint()} - Framework detenido manualmente")
+
+        finally:
+            mt5.shutdown()
+
         print(f"{Utils.dateprint()} - FIN")

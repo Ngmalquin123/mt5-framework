@@ -33,6 +33,10 @@ class OrderExecutor():
             None
         """
 
+        # Redondeamos precios y comprobamos la distancia mínima de los stops antes de enviar nada
+        if not self._prepare_order_prices(order_event):
+            return
+
         # Evaluamos el tipo de orden que se quiere ejecutar, y llamamos al método adecuado
         if order_event.target_order == "MARKET":
             # Llamamos al método que ejecuta órdenes a mercado
@@ -328,6 +332,44 @@ class OrderExecutor():
         
         # Colocar el execution event a la cola de eventos
         self.events_queue.put(execution_event)
+
+    def _prepare_order_prices(self, order_event: OrderEvent) -> bool:
+        """
+        Rounds the SL, TP and target price to the symbol digits and checks that the stops
+        respect the minimum distance required by the broker (trade_stops_level).
+
+        Args:
+            order_event (OrderEvent): The order event to prepare. Its prices are modified in place.
+
+        Returns:
+            bool: True if the order can be sent, False otherwise.
+        """
+        symbol_info = mt5.symbol_info(order_event.symbol)
+        if symbol_info is None:
+            print(f"{Utils.dateprint()} - ORD EXEC: No se ha podido recuperar la información de {order_event.symbol}. MT5 Error: {mt5.last_error()}")
+            return False
+
+        # MT5 rechaza precios con más decimales que el símbolo (p.ej. 1.1203999999999998)
+        digits = symbol_info.digits
+        order_event.sl = round(order_event.sl, digits)
+        order_event.tp = round(order_event.tp, digits)
+        order_event.target_price = round(order_event.target_price, digits)
+
+        # Precio de referencia: el de mercado para órdenes MARKET y el de la orden para las pendientes
+        if order_event.target_order == "MARKET":
+            reference_price = symbol_info.ask if order_event.signal == "BUY" else symbol_info.bid
+        else:
+            reference_price = order_event.target_price
+
+        # Distancia mínima exigida por el broker entre el precio y los stops
+        min_distance = symbol_info.trade_stops_level * symbol_info.point
+
+        for name, level in (("SL", order_event.sl), ("TP", order_event.tp)):
+            if level > 0 and abs(reference_price - level) < min_distance:
+                print(f"{Utils.dateprint()} - ORD EXEC: El {name} {level} de {order_event.symbol} está más cerca del precio que el mínimo del broker ({symbol_info.trade_stops_level} puntos). Orden NO enviada")
+                return False
+
+        return True
 
     def _get_filling_mode(self, symbol: str) -> int:
         """

@@ -13,10 +13,14 @@ from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRis
 from order_executor.order_executor import OrderExecutor
 from notifications.notifications import NotificationService, TelegramNotificationProperties
 from queue import Queue
+from utils.logger import TeeLogger
 from dotenv import load_dotenv, find_dotenv
 import os
 
 if __name__ == "__main__":
+
+    # Todo lo que se imprime se guarda también en logs/trading_YYYY-MM-DD.log
+    TeeLogger.start()
 
     # Cargamos las variables del .env (credenciales de MT5 y Telegram)
     load_dotenv(find_dotenv())
@@ -82,6 +86,7 @@ if __name__ == "__main__":
                                         position_sizer=POSITION_SIZER,
                                         risk_manager=RISK_MANAGER,
                                         order_executor=ORDER_EXECUTOR,
-                                        notification_service=NOTIFICATIONS)
+                                        notification_service=NOTIFICATIONS,
+                                        platform_connector=CONNECT)
     
     TRADING_DIRECTOR.execute()

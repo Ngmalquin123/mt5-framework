@@ -15,6 +15,9 @@ class PlatformConnector():
             symbol_list (list): List of symbols to be added to the MarketWatch.
         """
         
+        # Guardamos los símbolos para volver a añadirlos si hay que reconectar
+        self.symbols = symbol_list
+
         # Buscamos el archivo .env y cargamos sus valores
         load_dotenv(find_dotenv())
 
@@ -32,6 +35,29 @@ class PlatformConnector():
 
         # Añadimos los símbolos al MarketWatch
         self._add_symbols_to_marketwatch(symbol_list)
+
+    def ensure_connection(self) -> bool:
+        """
+        Checks that the terminal is connected to the broker and tries to reconnect if it is not.
+
+        Returns:
+            bool: True if the platform is connected, False otherwise.
+        """
+        terminal_info = mt5.terminal_info()
+        if terminal_info is not None and terminal_info.connected:
+            return True
+
+        print(f"{Utils.dateprint()} - Conexión con MT5 perdida. Intentando reconectar...")
+        mt5.shutdown()
+
+        try:
+            self._initialize_platform()
+        except Exception as e:
+            print(f"{Utils.dateprint()} - No se ha podido reconectar con MT5: {e}")
+            return False
+
+        self._add_symbols_to_marketwatch(self.symbols)
+        return True
 
     def _initialize_platform(self) -> None:
         """
