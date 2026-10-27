@@ -329,13 +329,14 @@ class OrderExecutor():
         # Simulamos un fill_time usando el momento actual
         fill_time = datetime.now()
         
-        # Creamos un pequeño bucle para dar tiempo al servidor a que genere el deal, y definimos un máximo de 5 intentos
-        for _ in range(5):
-            # Esperamos 0.5 segundos
-            time.sleep(0.5)
+        # Creamos un pequeño bucle para dar tiempo al servidor a que genere el deal, y definimos un máximo de 5 intentos.
+        # Primero lo buscamos y solo esperamos 0.5 segundos si todavía no está (antes esperaba siempre)
+        for attempt in range(5):
+            if attempt > 0:
+                time.sleep(0.5)
             try:
                 deal = mt5.history_deals_get(position=order_result.order)[0]  # Usamos position en lugar de ticket
-            except IndexError:
+            except (IndexError, TypeError):
                 deal = None
                 
             if not deal:

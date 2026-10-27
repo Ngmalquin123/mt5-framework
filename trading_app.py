@@ -12,6 +12,7 @@ from risk_manager.risk_manager import RiskManager
 from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRiskProps, TradingLimitsProps
 from order_executor.order_executor import OrderExecutor
 from notifications.notifications import NotificationService, TelegramNotificationProperties
+from trade_journal.trade_journal import TradeJournal
 from queue import Queue
 from utils.logger import TeeLogger
 from dotenv import load_dotenv, find_dotenv
@@ -85,6 +86,11 @@ if __name__ == "__main__":
     )
 
 
+    # Diario de operaciones: cada operación cerrada se guarda en logs/trades.csv y se avisa por Telegram
+    TRADE_JOURNAL = TradeJournal(magic_number=magic_number,
+                                strategy_name="RSI",
+                                file_path="logs/trades.csv")
+
     # Creación del trading director y ejecución del método principal
     TRADING_DIRECTOR = TradingDirector(events_queue=events_queue,
                                         data_provider=DATA_PROVIDER,
@@ -93,6 +99,7 @@ if __name__ == "__main__":
                                         risk_manager=RISK_MANAGER,
                                         order_executor=ORDER_EXECUTOR,
                                         notification_service=NOTIFICATIONS,
-                                        platform_connector=CONNECT)
+                                        platform_connector=CONNECT,
+                                        trade_journal=TRADE_JOURNAL)
     
     TRADING_DIRECTOR.execute()

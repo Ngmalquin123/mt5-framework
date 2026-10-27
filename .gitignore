@@ -6,3 +6,5 @@ __pycache__/
 venv/
 .conda/
 logs/
+backtest/data/
+backtest/results/

@@ -76,6 +76,28 @@ class DataProvider():
         except KeyError:
             raise ValueError(f"Timeframe {timeframe} no es válido.")
     
+    @staticmethod
+    def _rates_to_dataframe(bars_np_array) -> pd.DataFrame:
+        """
+        Converts the bars returned by MT5 to a DataFrame with the time as index.
+
+        Args:
+            bars_np_array: The structured numpy array returned by copy_rates_from_pos.
+
+        Returns:
+            pd.DataFrame: Columns open, high, low, close, tickvol, vol and spread.
+        """
+        # Creamos el DataFrame directamente desde las columnas que nos interesan, con time (datetime) como índice
+        # y los nombres tickvol y vol. Es varias veces más rápido que crearlo entero y luego modificarlo (importante en el backtest)
+        index = pd.DatetimeIndex(pd.to_datetime(bars_np_array['time'], unit='s'), name='time')
+        return pd.DataFrame({'open': bars_np_array['open'],
+                             'high': bars_np_array['high'],
+                             'low': bars_np_array['low'],
+                             'close': bars_np_array['close'],
+                             'tickvol': bars_np_array['tick_volume'],
+                             'vol': bars_np_array['real_volume'],
+                             'spread': bars_np_array['spread']}, index=index)
+
     def get_latest_closed_bar(self, symbol: str, timeframe: str) -> pd.Series:
         """
         Retrieves the latest closed bar for a given symbol and timeframe.
@@ -102,15 +124,7 @@ class DataProvider():
                 # Vamos a devolver una Series empty
                 return pd.Series()
 
-            bars = pd.DataFrame(bars_np_array)
-
-            # Convertimos la columna time a datetime y la hacemos el índice
-            bars['time'] = pd.to_datetime(bars['time'], unit='s')
-            bars.set_index('time', inplace=True)
-
-            # Cambiamos nombres de columnas y las reorganizamos
-            bars.rename(columns={'tick_volume': 'tickvol', 'real_volume': 'vol'}, inplace=True)
-            bars = bars[['open', 'high', 'low', 'close', 'tickvol', 'vol', 'spread']]
+            bars = self._rates_to_dataframe(bars_np_array)
         
         except Exception as e:
             print(f"{Utils.dateprint()} - No se han podido recuperar los datos de la última vela de {symbol} {timeframe} - MT5 Error: {mt5.last_error()}, exception: {e}")
@@ -153,15 +167,7 @@ class DataProvider():
                 # Vamos a devolver un DataFrame empty
                 return pd.DataFrame()
 
-            bars = pd.DataFrame(bars_np_array)
-
-            # Convertimos la columna time a datetime y la hacemos el índice
-            bars['time'] = pd.to_datetime(bars['time'], unit='s')
-            bars.set_index('time', inplace=True)
-
-            # Cambiamos nombres de columnas y las reorganizamos
-            bars.rename(columns={'tick_volume': 'tickvol', 'real_volume': 'vol'}, inplace=True)
-            bars = bars[['open', 'high', 'low', 'close', 'tickvol', 'vol', 'spread']]
+            bars = self._rates_to_dataframe(bars_np_array)
         
         except Exception as e:
             print(f"{Utils.dateprint()} - No se han podido recuperar los datos de la última vela de {symbol} {timeframe} - MT5 Error: {mt5.last_error()}, exception: {e}")

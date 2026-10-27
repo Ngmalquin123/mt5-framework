@@ -9,7 +9,9 @@ from notifications.notifications import NotificationService
 from events.events import DataEvent, SignalEvent, SizingEvent, OrderEvent, ExecutionEvent, PlacedPendingOrderEvent
 from utils.utils import Utils
 from platform_connector.platform_connector import PlatformConnector
+from trade_journal.trade_journal import TradeJournal
 from typing import Dict, Callable
+from datetime import datetime, timezone
 import MetaTrader5 as mt5
 import traceback
 import queue
@@ -20,7 +22,7 @@ class TradingDirector():
     
     def __init__(self, events_queue: queue.Queue, data_provider: DataProvider, signal_generator: ISignalGenerator,
                 position_sizer: PositionSizer, risk_manager: RiskManager, order_executor: OrderExecutor, notification_service: NotificationService,
-                platform_connector: PlatformConnector = None):
+                platform_connector: PlatformConnector = None, trade_journal: TradeJournal = None):
         """
         Initializes the TradingDirector object.
 
@@ -33,6 +35,7 @@ class TradingDirector():
             order_executor (OrderExecutor): The order executor object.
             notification_service (NotificationService): The notification service object.
             platform_connector (PlatformConnector, optional): Used to check and restore the connection with MT5.
+            trade_journal (TradeJournal, optional): Saves the closed trades, notifies them and sends a daily summary.
         """
         self.events_queue = events_queue
         
@@ -44,6 +47,7 @@ class TradingDirector():
         self.ORDER_EXECUTOR = order_executor
         self.NOTIFICATIONS = notification_service
         self.PLATFORM_CONNECTOR = platform_connector
+        self.TRADE_JOURNAL = trade_journal
 
         # Controlador de trading
         self.continue_trading: bool = True
@@ -60,6 +64,12 @@ class TradingDirector():
         # Revisión periódica de órdenes pendientes caducadas
         self.pending_orders_check_seconds: float = 30.0
         self._last_pending_orders_check: float = 0.0
+
+        # Revisión periódica de operaciones cerradas (diario de operaciones) y resumen diario
+        self.trade_journal_check_seconds: float = 30.0
+        self._last_trade_journal_check: float = 0.0
+        self._trade_journal_started: bool = False
+        self._summary_day = None
 
         # Creación del event handler
         self.event_handler: Dict[str, Callable] = {
@@ -239,6 +249,58 @@ class TradingDirector():
         # Pausa para no repetir el mismo error cientos de veces por segundo
         time.sleep(1)
 
+    def _run_periodic_tasks(self) -> None:
+        """
+        Runs the tasks that do not depend on new data: cancel expired pending orders,
+        save and notify the closed trades and send the daily summary.
+        """
+        # Cancelamos las órdenes pendientes caducadas (cada pending_orders_check_seconds)
+        if time.time() - self._last_pending_orders_check >= self.pending_orders_check_seconds:
+            self._last_pending_orders_check = time.time()
+            self.ORDER_EXECUTOR.cancel_expired_pending_orders()
+
+        # Operaciones cerradas (por SL, TP, el Framework o a mano) y resumen diario (cada trade_journal_check_seconds)
+        if self.TRADE_JOURNAL is not None and time.time() - self._last_trade_journal_check >= self.trade_journal_check_seconds:
+            self._last_trade_journal_check = time.time()
+            self._update_trade_journal()
+            self._check_daily_summary()
+
+    def _update_trade_journal(self) -> None:
+        """
+        Saves the new closed trades in the journal and notifies each of them.
+        """
+        new_trades = self.TRADE_JOURNAL.update()
+
+        # La primera revisión recupera operaciones de días anteriores: se guardan pero no se avisan (serían muchos mensajes)
+        if not self._trade_journal_started:
+            self._trade_journal_started = True
+            return
+
+        for trade in new_trades:
+            message = (f"{Utils.dateprint()} - Cerrada {trade['side']} de {trade['volume']} lotes en {trade['symbol']} ({trade['exit_reason']})\n"
+                       f"Entrada: {trade['entry_price']} | Salida: {trade['exit_price']}\n"
+                       f"Resultado: {trade['net_profit']:+.2f}")
+            print(message)
+            self.NOTIFICATIONS.send_notification(title=f"{trade['symbol']} - TRADE CERRADO", message=message)
+
+    def _check_daily_summary(self) -> None:
+        """
+        Sends the summary of the previous day when the server day changes.
+        """
+        tick = mt5.symbol_info_tick(self.DATA_PROVIDER.symbols[0])
+        if tick is None:
+            return
+
+        # Día actual en hora del servidor (el time de los ticks está en hora del servidor)
+        server_day = datetime.fromtimestamp(tick.time, tz=timezone.utc).date()
+
+        if self._summary_day is not None and server_day != self._summary_day:
+            summary = self.TRADE_JOURNAL.daily_summary(self._summary_day)
+            print(f"{Utils.dateprint()} - {summary}")
+            self.NOTIFICATIONS.send_notification(title="RESUMEN DIARIO", message=summary)
+
+        self._summary_day = server_day
+
     def execute(self) -> None:
         """
         Executes the main trading loop.
@@ -264,10 +326,8 @@ class TradingDirector():
                         time.sleep(1)
                         continue
 
-                    # Cancelamos las órdenes pendientes caducadas (cada pending_orders_check_seconds)
-                    if time.time() - self._last_pending_orders_check >= self.pending_orders_check_seconds:
-                        self._last_pending_orders_check = time.time()
-                        self.ORDER_EXECUTOR.cancel_expired_pending_orders()
+                    # Tareas periódicas: órdenes pendientes caducadas, diario de operaciones y resumen diario
+                    self._run_periodic_tasks()
 
                     try:
                         event = self.events_queue.get(block=False)    # Recordar que es una cola FIFO
