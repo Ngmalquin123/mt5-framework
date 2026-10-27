@@ -1,7 +1,7 @@
 # QUANTDEMY - https://quantdemy.com - Trading con Python y MetaTrader 5: Crea tu Propio Framework
 
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import pandas as pd
 from datetime import datetime
 
@@ -46,10 +46,8 @@ class BaseEvent(BaseModel):
     """
     event_type: EventType
 
-    class Config:
-        arbitrary_types_allowed = True
-        # Guardamos el valor de los enums ("BUY") para que los mensajes no muestren "SignalType.BUY"
-        use_enum_values = True
+    # Guardamos el valor de los enums ("BUY") para que los mensajes no muestren "SignalType.BUY"
+    model_config = ConfigDict(arbitrary_types_allowed=True, use_enum_values=True)
 
 class DataEvent(BaseEvent):
     """

@@ -1,0 +1,68 @@
+# Configuración del Framework. La usan trading_app.py (cuenta real/demo) y backtest_app.py (backtest),
+# así lo que se prueba en el backtest es exactamente lo que luego se ejecuta en la cuenta.
+# Las credenciales NO van aquí: van en el .env
+
+[trading]
+symbols = ["EURUSD", "USDJPY", "GBPUSD"]
+timeframe = "1min"              # 1min, 5min, 15min, 30min, 1h, 4h, 1d...
+magic_number = 12345
+strategy = "rsi"                # Estrategia activa: "rsi" o "ma_crossover"
+
+# ---------------- Estrategias
+# SL y TP: en puntos fijos (sl_points / tp_points) o en múltiplos del ATR (sl_atr / tp_atr).
+# Si sl_atr o tp_atr es mayor que 0 se usa el ATR y se ignoran los puntos: así los stops se adaptan
+# solos al timeframe, al símbolo y a la volatilidad. Un 0 desactiva el SL o el TP.
+
+[strategies.rsi]
+rsi_period = 5
+rsi_upper = 70.0
+rsi_lower = 30.0
+sl_points = 50                  # 10 puntos = 1 pip en EURUSD
+tp_points = 100
+sl_atr = 0.0                    # p.ej. 1.5 -> SL a 1.5 veces el ATR
+tp_atr = 0.0                    # p.ej. 3.0 -> TP a 3 veces el ATR
+atr_period = 14                 # velas para calcular el ATR
+
+[strategies.ma_crossover]
+fast_period = 5
+slow_period = 10
+sl_points = 0
+tp_points = 0
+sl_atr = 0.0
+tp_atr = 0.0
+atr_period = 14
+
+# ---------------- Tamaño de las posiciones
+[sizing]
+method = "fixed"                # "fixed" (volumen fijo), "min" (volumen mínimo) o "risk_pct" (% de riesgo)
+volume = 0.05                   # lotes, para "fixed"
+risk_pct = 0.01                 # para "risk_pct": 0.01 = arriesgar el 1% del equity hasta el SL (necesita SL)
+
+# ---------------- Gestión del riesgo
+[risk]
+max_leverage_factor = 5
+
+# Límites generales antes de cada orden. Un 0 (o "" en las horas) desactiva el límite
+[limits]
+max_daily_loss_pct = 0.02       # 2% del balance al empezar el día
+max_open_positions = 3
+max_spread_points = 20          # 2 pips en EURUSD
+no_trading_start = "23:45"      # hora del SERVIDOR
+no_trading_end = "01:15"
+
+# ---------------- Órdenes y registro
+[orders]
+pending_order_max_age_minutes = 60      # 0 = las pendientes no caducan
+
+[journal]
+file = "logs/trades.csv"
+
+# ---------------- Backtest (solo lo usa backtest_app.py)
+[backtest]
+start = "2025-01-01"
+end = "2026-10-01"
+data_dir = "backtest/data"
+initial_balance = 10000.0
+account_currency = "USD"
+commission_per_lot = 0.0        # comisión por lote y por lado (entrada y salida), en la divisa de la cuenta
+spread_points = 0               # 0 = el spread real de cada vela. Otro valor = spread fijo en puntos

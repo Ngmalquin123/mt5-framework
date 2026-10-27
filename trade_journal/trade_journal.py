@@ -37,7 +37,10 @@ class TradeJournal():
         return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     @staticmethod
-    def _exit_reason(reason: int) -> str:
+    def _exit_reason(reason: int, comment: str = "") -> str:
+        # Cierres del backtest al llegar al final de los datos
+        if comment == "FIN BACKTEST":
+            return comment
         reasons = {mt5.DEAL_REASON_SL: "SL", mt5.DEAL_REASON_TP: "TP", mt5.DEAL_REASON_SO: "STOP OUT", mt5.DEAL_REASON_EXPERT: "FRAMEWORK"}
         return reasons.get(reason, "MANUAL")
 
@@ -74,7 +77,7 @@ class TradeJournal():
             "entry_time": self._format_time(entry_deal.time) if entry_deal else "",
             "entry_price": entry_deal.price if entry_deal else "",
             "exit_price": exit_deal.price,
-            "exit_reason": self._exit_reason(exit_deal.reason),
+            "exit_reason": self._exit_reason(exit_deal.reason, exit_deal.comment),
             "profit": round(exit_deal.profit, 2),
             "commission": round(commission, 2),
             "swap": round(swap, 2),

@@ -50,7 +50,7 @@ class SignalGenerator(ISignalGenerator):
             return SignalRSI(properties=signal_props)
         
         else:
-            raise Exception(f"ERROR: Método de sizing desconocido: {signal_props}")
+            raise Exception(f"ERROR: Método de generación de señales desconocido: {signal_props}")
 
     def generate_signal(self, data_event: DataEvent) -> None:
         """

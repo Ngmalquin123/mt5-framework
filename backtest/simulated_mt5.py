@@ -34,6 +34,9 @@ Order = namedtuple("Order", "ticket time_setup type magic volume_initial volume_
 Deal = namedtuple("Deal", "ticket order time time_msc type entry magic position_id reason volume price commission swap profit fee symbol comment")
 TradeResult = namedtuple("TradeResult", "retcode deal order volume price bid ask comment request")
 
+# Comentario de los cierres forzados al terminar el backtest (el diario los muestra como "FIN BACKTEST")
+BACKTEST_END_COMMENT = "FIN BACKTEST"
+
 RATES_DTYPE = np.dtype([('time', 'i8'), ('open', 'f8'), ('high', 'f8'), ('low', 'f8'), ('close', 'f8'),
                         ('tick_volume', 'i8'), ('spread', 'i4'), ('real_volume', 'i8')])
 
@@ -108,6 +111,17 @@ class SimulatedMT5():
         self.rates: dict = {}
         self.times: dict = {}
         self.specs: dict = {}
+
+        # Antes de cargar nada comprobamos que estén todos los CSV, para indicar de una vez todo lo que falta
+        if bars is None:
+            missing = [s for s in symbols if not os.path.exists(os.path.join(data_dir, f"{s}_{timeframe}.csv"))]
+            if missing:
+                raise FileNotFoundError(
+                    f"\n\nFaltan los datos de {', '.join(missing)} en {timeframe} (carpeta {data_dir}).\n"
+                    f"Descárgalos primero con MT5 abierto (cambia la fecha de inicio si quieres otro periodo):\n\n"
+                    f"    uv run python -m backtest.download_data --symbols {' '.join(symbols)} --timeframe {timeframe} "
+                    f"--start {start or '2025-01-01'}\n")
+
         for symbol in symbols:
             df = bars[symbol] if bars is not None else self._read_csv(data_dir, symbol, timeframe)
             self.rates[symbol] = self._to_rates(df)
@@ -477,12 +491,13 @@ class SimulatedMT5():
     def _commission(self, volume: float) -> float:
         return -round(self.commission_per_lot * volume, 2) or 0.0
 
-    def _add_deal(self, position: dict, deal_type: int, entry: int, reason: int, price: float, profit: float, time: int) -> None:
+    def _add_deal(self, position: dict, deal_type: int, entry: int, reason: int, price: float, profit: float, time: int,
+                  comment: str = None) -> None:
         commission = self._commission(position["volume"])
         self.balance += profit + commission
         deal = Deal(self._new_ticket(), position["ticket"], time, time * 1000, deal_type, entry, position["magic"],
                     position["ticket"], reason, position["volume"], price, commission, 0.0, profit, 0.0,
-                    position["symbol"], position["comment"])
+                    position["symbol"], position["comment"] if comment is None else comment)
         # Los deals de SL/TP llevan la hora de su vela, que puede ser anterior al último deal: mantenemos el orden
         insert_at = bisect.bisect_right(self._deal_times, time)
         self.deals.insert(insert_at, deal)
@@ -499,18 +514,18 @@ class SimulatedMT5():
         self._add_deal(position, deal_type, self.DEAL_ENTRY_IN, self.DEAL_REASON_EXPERT, price, 0.0, position["time"])
         return ticket
 
-    def _close_position(self, position: dict, price: float, reason: int, time: int = None) -> None:
+    def _close_position(self, position: dict, price: float, reason: int, time: int = None, comment: str = None) -> None:
         profit = self._profit(position["symbol"], position["type"], position["volume"], position["price_open"], price)
         deal_type = self.DEAL_TYPE_SELL if position["type"] == self.POSITION_TYPE_BUY else self.DEAL_TYPE_BUY
         del self.positions[position["ticket"]]
-        self._add_deal(position, deal_type, self.DEAL_ENTRY_OUT, reason, price, profit, time or self.now)
+        self._add_deal(position, deal_type, self.DEAL_ENTRY_OUT, reason, price, profit, time or self.now, comment)
 
     def close_all_positions(self) -> None:
         """Closes every open position at the current price (end of the backtest) and removes the pending orders."""
         for position in list(self.positions.values()):
             is_buy = position["type"] == self.POSITION_TYPE_BUY
             price = self._current_bid(position["symbol"]) if is_buy else self._current_ask(position["symbol"])
-            self._close_position(position, price, self.DEAL_REASON_CLIENT)
+            self._close_position(position, price, self.DEAL_REASON_CLIENT, comment=BACKTEST_END_COMMENT)
         self.orders.clear()
 
     def _process_closed_bar(self, symbol: str, bar) -> None:

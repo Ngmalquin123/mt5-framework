@@ -1,9 +1,9 @@
 # QUANTDEMY - https://quantdemy.com - Trading con Python y MetaTrader 5: Crea tu Propio Framework
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class BaseSizerProps(BaseModel):
-    pass
+    model_config = ConfigDict(extra="forbid")
 
 class MinSizingProps(BaseSizerProps):
     pass

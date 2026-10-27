@@ -52,6 +52,10 @@ class TradingDirector():
         # Controlador de trading
         self.continue_trading: bool = True
 
+        # Pausa cuando no hay eventos pendientes. Antes se revisaban datos nuevos 100 veces por segundo (mucha CPU);
+        # 0.2 s es de sobra para detectar una vela nueva a tiempo incluso en M1
+        self.idle_sleep_seconds: float = 0.2
+
         # Control de errores: si hay demasiados errores seguidos detenemos el Framework
         self.consecutive_errors: int = 0
         self.max_consecutive_errors: int = 20
@@ -334,6 +338,9 @@ class TradingDirector():
 
                     except queue.Empty:
                         self.DATA_PROVIDER.check_for_new_data()
+                        # Sin eventos pendientes: esperamos un poco antes de volver a mirar
+                        if self.events_queue.empty():
+                            time.sleep(self.idle_sleep_seconds)
 
                     else:
                         if event is not None:
@@ -348,8 +355,6 @@ class TradingDirector():
 
                 else:
                     self.consecutive_errors = 0
-
-                time.sleep(0.01)
 
         except KeyboardInterrupt:
             # Cierre ordenado con Ctrl+C

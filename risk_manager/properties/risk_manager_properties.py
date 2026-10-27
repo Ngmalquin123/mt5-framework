@@ -1,9 +1,9 @@
 # QUANTDEMY - https://quantdemy.com - Trading con Python y MetaTrader 5: Crea tu Propio Framework
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class BaseRiskProps(BaseModel):
-    pass
+    model_config = ConfigDict(extra="forbid")
 
 class MaxLeverageFactorRiskProps(BaseRiskProps):
     """
@@ -24,6 +24,8 @@ class TradingLimitsProps(BaseModel):
         no_trading_start (str): Start of the period without new trades, server time "HH:MM".
         no_trading_end (str): End of the period without new trades, server time "HH:MM".
     """
+    model_config = ConfigDict(extra="forbid")
+
     max_daily_loss_pct: float = 0.02
     max_open_positions: int = 3
     max_spread_points: int = 20

@@ -1,29 +1,33 @@
-# Backtest de la estrategia con los MISMOS módulos del Framework que trading_app.py, sobre velas históricas.
+# Backtest de la estrategia con los MISMOS módulos y la MISMA configuración (config.toml) que trading_app.py.
 #
-# 1) Descarga los datos (en Windows con MT5 abierto):
-#    uv run python -m backtest.download_data --symbols EURUSD USDJPY GBPUSD --timeframe 1h --start 2025-01-01
+# 1) Descarga los datos (en Windows con MT5 abierto), con el timeframe de config.toml:
+#    uv run python -m backtest.download_data --symbols EURUSD USDJPY GBPUSD --timeframe 1min --start 2026-08-01
 # 2) Ejecuta el backtest (funciona en cualquier sistema, no necesita MT5):
-#    uv run backtest_app.py
+#    uv run backtest_app.py                     (lee config.toml)
+#    uv run backtest_app.py otra_config.toml    (para probar otros parámetros sin tocar los del real)
 
 from backtest.simulated_mt5 import SimulatedMT5
+from utils.config import FrameworkConfig
 from datetime import datetime
+import sys
 
 if __name__ == "__main__":
 
-    # Definición de variables necesarias para la estrategia
-    symbols = ['EURUSD', 'USDJPY', 'GBPUSD']
-    timeframe = '1h'
-    magic_number = 12345
+    # Misma configuración que el real. Lo propio del backtest (fechas, balance, comisión) está en [backtest]
+    CONFIG = FrameworkConfig(sys.argv[1] if len(sys.argv) > 1 else "config.toml")
+    BT = CONFIG.backtest
+    print(CONFIG.summary())
 
     # Broker simulado: periodo del backtest, cuenta y costes
-    SIM = SimulatedMT5(symbols=symbols,
-                        timeframe=timeframe,
-                        start="2025-01-01",
-                        end="2026-10-01",
-                        data_dir="backtest/data",
-                        initial_balance=10000.0,
-                        account_currency="USD",
-                        commission_per_lot=0.0)     # comisión por lote y por lado (entrada y salida)
+    SIM = SimulatedMT5(symbols=CONFIG.symbols,
+                        timeframe=CONFIG.timeframe,
+                        start=BT.get("start"),
+                        end=BT.get("end"),
+                        data_dir=BT.get("data_dir", "backtest/data"),
+                        initial_balance=BT.get("initial_balance", 10000.0),
+                        account_currency=BT.get("account_currency", "USD"),
+                        commission_per_lot=BT.get("commission_per_lot", 0.0),
+                        spread_points=BT.get("spread_points") or None)
 
     # IMPORTANTE: activar el MT5 simulado ANTES de importar los módulos del Framework
     SIM.activate()
@@ -31,69 +35,51 @@ if __name__ == "__main__":
     from data_provider.data_provider import DataProvider
     from trading_director.trading_director import TradingDirector
     from signal_generator.signal_generator import SignalGenerator
-    from signal_generator.properties.signal_generator_properties import MACrossoverProps, RSIProps
     from position_sizer.position_sizer import PositionSizer
-    from position_sizer.properties.position_sizer_properties import MinSizingProps, FixedSizingProps, RiskPctSizingProps
     from portfolio.portfolio import Portfolio
     from risk_manager.risk_manager import RiskManager
-    from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRiskProps, TradingLimitsProps
     from order_executor.order_executor import OrderExecutor
     from notifications.notifications import NotificationService, TelegramNotificationProperties
     from trade_journal.trade_journal import TradeJournal
     from backtest.backtester import Backtester
     from queue import Queue
 
-    mac_props = MACrossoverProps(timeframe=timeframe,
-                                fast_period=5,
-                                slow_period=10)
-
-    rsi_props = RSIProps(timeframe=timeframe,
-                        rsi_period=5,
-                        rsi_upper=70.0,
-                        rsi_lower=30.0,
-                        sl_points=50,
-                        tp_points=100)
-
     # Creación de la cola de eventos principal
     events_queue = Queue()
 
     # Creación de los módulos principales del Framework (igual que en trading_app.py)
     DATA_PROVIDER = DataProvider(events_queue=events_queue,
-                                symbol_list=symbols,
-                                timeframe=timeframe)
+                                symbol_list=CONFIG.symbols,
+                                timeframe=CONFIG.timeframe)
 
-    PORTFOLIO = Portfolio(magic_number=magic_number)
+    PORTFOLIO = Portfolio(magic_number=CONFIG.magic_number)
 
     ORDER_EXECUTOR = OrderExecutor(events_queue=events_queue,
                                     portfolio=PORTFOLIO,
-                                    pending_order_max_age_minutes=60)
+                                    pending_order_max_age_minutes=CONFIG.pending_order_max_age_minutes)
 
     SIGNAL_GENERATOR = SignalGenerator(events_queue=events_queue,
                                         data_provider=DATA_PROVIDER,
                                         portfolio=PORTFOLIO,
                                         order_executor=ORDER_EXECUTOR,
-                                        signal_properties=rsi_props)
+                                        signal_properties=CONFIG.signal_props)
 
     POSITION_SIZER = PositionSizer(events_queue=events_queue,
                                     data_provider=DATA_PROVIDER,
-                                    sizing_properties=FixedSizingProps(volume=0.05))
+                                    sizing_properties=CONFIG.sizing_props)
 
     RISK_MANAGER = RiskManager(events_queue=events_queue,
                                 data_provider=DATA_PROVIDER,
                                 portfolio=PORTFOLIO,
-                                risk_properties=MaxLeverageFactorRiskProps(max_leverage_factor=5),
-                                trading_limits=TradingLimitsProps(max_daily_loss_pct=0.02,
-                                                                  max_open_positions=3,
-                                                                  max_spread_points=20,
-                                                                  no_trading_start="23:45",
-                                                                  no_trading_end="01:15"))
+                                risk_properties=CONFIG.risk_props,
+                                trading_limits=CONFIG.trading_limits)
 
     # En el backtest no se mandan mensajes de Telegram
     NOTIFICATIONS = NotificationService(properties=TelegramNotificationProperties(token="", chat_id=""))
 
     # Cada backtest guarda sus operaciones en un CSV nuevo
-    TRADE_JOURNAL = TradeJournal(magic_number=magic_number,
-                                strategy_name="RSI",
+    TRADE_JOURNAL = TradeJournal(magic_number=CONFIG.magic_number,
+                                strategy_name=CONFIG.strategy_name,
                                 file_path=f"backtest/results/backtest_{datetime.now():%Y%m%d_%H%M%S}_trades.csv")
 
     TRADING_DIRECTOR = TradingDirector(events_queue=events_queue,

@@ -4,9 +4,11 @@ from events.events import DataEvent, SignalEvent
 from data_provider.data_provider import DataProvider
 from ..interfaces.signal_generator_interface import ISignalGenerator
 from ..properties.signal_generator_properties import MACrossoverProps
+from .stop_levels import StopLevels
 from portfolio.portfolio import Portfolio
 from order_executor.order_executor import OrderExecutor
 from utils.utils import Utils
+import MetaTrader5 as mt5
 
 class SignalMACrossover(ISignalGenerator):
     
@@ -28,6 +30,9 @@ class SignalMACrossover(ISignalGenerator):
         if self.fast_period >= self.slow_period:
             raise Exception(f"ERROR: el periodo rápido ({self.fast_period}) es mayor o igual al periodo lento ({self.slow_period}) para el cálculo de las medias móviles")
 
+        # SL y TP en puntos fijos o en múltiplos del ATR (desactivados por defecto)
+        self.stops = StopLevels(properties)
+
     
     def generate_signal(self, data_event: DataEvent, data_provider: DataProvider, portfolio: Portfolio, order_executor: OrderExecutor) -> SignalEvent:
         """
@@ -47,8 +52,10 @@ class SignalMACrossover(ISignalGenerator):
 
         # Recuperamos los datos necesarios para calcular las medias móviles
         # Pedimos una vela más para poder calcular también las medias de la vela anterior
-        bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, self.slow_period + 1)
-        if bars is None or len(bars) < self.slow_period + 1:
+        # (también las necesarias para el ATR si los stops lo usan)
+        num_bars = max(self.slow_period + 1, self.stops.bars_needed)
+        bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, num_bars)
+        if bars is None or len(bars) < num_bars:
             return None
 
         # Recuperamos las posiciones abiertas por esta estrategia en el símbolo donde hemos tenido el Data Event
@@ -93,13 +100,20 @@ class SignalMACrossover(ISignalGenerator):
 
         # Si tenemos señal, generamos SignalEvent y lo colocamos en la cola de Eventos
         if signal != "":
+            sl, tp = 0.0, 0.0
+            if self.stops.sl_points or self.stops.tp_points or self.stops.uses_atr:
+                last_tick = data_provider.get_latest_tick(symbol)
+                if not last_tick:
+                    return None
+                sl, tp = self.stops.compute(signal, last_tick, mt5.symbol_info(symbol).point, bars)
+
             signal_event = SignalEvent(symbol=symbol,
                                     signal=signal,
                                     target_order="MARKET",
                                     target_price=0.0,
                                     magic_number=portfolio.magic,
-                                    sl=0.0,
-                                    tp=0.0)
+                                    sl=sl,
+                                    tp=tp)
             
             return signal_event
 

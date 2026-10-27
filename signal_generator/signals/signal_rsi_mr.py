@@ -4,6 +4,7 @@ from events.events import DataEvent, SignalEvent
 from data_provider.data_provider import DataProvider
 from ..interfaces.signal_generator_interface import ISignalGenerator
 from ..properties.signal_generator_properties import RSIProps
+from .stop_levels import StopLevels
 from portfolio.portfolio import Portfolio
 from order_executor.order_executor import OrderExecutor
 from utils.utils import Utils
@@ -40,15 +41,8 @@ class SignalRSI(ISignalGenerator):
         if self.rsi_lower >= self.rsi_upper:
             raise Exception(f"ERROR: el nivel superior ({self.rsi_upper}) es menor o igual al nivel inferior ({self.rsi_lower}) para el cálculo de las señales de entrada")
         
-        if properties.sl_points > 0:
-            self.sl_points = properties.sl_points
-        else:
-            self.sl_points = 0
-
-        if properties.tp_points > 0:
-            self.tp_points = properties.tp_points
-        else:
-            self.tp_points = 0
+        # SL y TP en puntos fijos o en múltiplos del ATR
+        self.stops = StopLevels(properties)
     
 
     def compute_rsi(self, prices: pd.Series) -> float:
@@ -88,8 +82,10 @@ class SignalRSI(ISignalGenerator):
         symbol = data_event.symbol
 
         # Recuperamos los datos necesarios para calcular el indicador del RSI
-        bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, self.rsi_period + 1)
-        if bars is None or len(bars) < self.rsi_period + 1:
+        # (también las necesarias para el ATR si los stops lo usan)
+        num_bars = max(self.rsi_period + 1, self.stops.bars_needed)
+        bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, num_bars)
+        if bars is None or len(bars) < num_bars:
             return None
 
         # Calculamos el RSI de las últimas velas
@@ -114,8 +110,6 @@ class SignalRSI(ISignalGenerator):
                     print(f"{Utils.dateprint()} - SIGNAL: No se han podido cerrar las ventas de {symbol}. No se abre la compra")
                     return None
             signal = "BUY"
-            sl = last_tick['ask'] - self.sl_points * points if self.sl_points > 0 else 0
-            tp = last_tick['ask'] + self.tp_points * points if self.tp_points > 0 else 0
 
         # Señal de venta
         elif open_positions['SHORT'] == 0 and rsi > self.rsi_upper:
@@ -126,14 +120,13 @@ class SignalRSI(ISignalGenerator):
                     print(f"{Utils.dateprint()} - SIGNAL: No se han podido cerrar las compras de {symbol}. No se abre la venta")
                     return None
             signal = "SELL"
-            sl = last_tick['bid'] + self.sl_points * points if self.sl_points > 0 else 0
-            tp = last_tick['bid'] - self.tp_points * points if self.tp_points > 0 else 0
 
         else:
             signal = ""
 
         # Si tenemos señal, generamos SignalEvent y lo colocamos en la cola de Eventos
         if signal != "":
+            sl, tp = self.stops.compute(signal, last_tick, points, bars)
             signal_event = SignalEvent(symbol=symbol,
                                     signal=signal,
                                     target_order="MARKET",
