@@ -21,7 +21,7 @@ class Portfolio():
         Returns:
             tuple: A tuple containing the open positions.
         """
-        return mt5.positions_get()
+        return mt5.positions_get() or ()
 
     def get_strategy_open_positions(self) -> tuple:
         """
@@ -31,7 +31,7 @@ class Portfolio():
             tuple: A tuple containing the open positions for the strategy.
         """
         positions = []
-        for position in mt5.positions_get():
+        for position in mt5.positions_get() or ():
             if position.magic == self.magic:
                 positions.append(position)
         
@@ -50,7 +50,7 @@ class Portfolio():
         """
         longs = 0
         shorts = 0
-        for position in mt5.positions_get(symbol=symbol):
+        for position in mt5.positions_get(symbol=symbol) or ():
             if position.type == mt5.ORDER_TYPE_BUY:
                 longs += 1
             else:
@@ -72,7 +72,7 @@ class Portfolio():
         longs = 0
         shorts = 0
 
-        for position in mt5.positions_get(symbol=symbol):
+        for position in mt5.positions_get(symbol=symbol) or ():
             if position.magic == self.magic:
                 if position.type == mt5.ORDER_TYPE_BUY:
                     longs += 1

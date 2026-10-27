@@ -49,7 +49,7 @@ class PlatformConnector():
             password=os.getenv("MT5_PASSWORD"),
             server=os.getenv("MT5_SERVER"),
             timeout=int(os.getenv("MT5_TIMEOUT")),
-            portable=eval(os.getenv("MT5_PORTABLE"))):
+            portable=os.getenv("MT5_PORTABLE", "False").strip().lower() in ("true", "1")):
             print(f"{Utils.dateprint()} - La plataforma MT5 se ha lanzado con éxito!")
         else:
             raise Exception(f"Ha ocurrido un error al inicializar la plataforma MT5: {mt5.last_error()}")
@@ -62,6 +62,9 @@ class PlatformConnector():
         """
         # Recuperamos el objeto de tipo AccountInfo
         account_info = mt5.account_info()
+        if account_info is None:
+            mt5.shutdown()
+            raise Exception(f"No se ha podido recuperar la información de la cuenta: {mt5.last_error()}")
         
         # Comprobar el tipo de cuenta que se ha lanzado
         if account_info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO:
@@ -82,7 +85,8 @@ class PlatformConnector():
             Exception: If algorithmic trading is disabled.
         """
         # Vamos a comprobar que el trading algorítmico está activado
-        if not mt5.terminal_info().trade_allowed:
+        terminal_info = mt5.terminal_info()
+        if terminal_info is None or not terminal_info.trade_allowed:
             raise Exception("El trading algorítmico está desactivado. Por favor, actívalo MANUALMENTE desde la configuración del terminal MT5.")
 
     def _add_symbols_to_marketwatch(self, symbols: list) -> None:

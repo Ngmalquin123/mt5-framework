@@ -2,7 +2,6 @@
 
 import MetaTrader5 as mt5
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 # Crear un método estático para poder convertir una divisa a otra
 class Utils():
@@ -43,7 +42,14 @@ class Utils():
         to_ccy = to_ccy.upper()
 
         # Buscamos el símbolo que relaciona nuestra divisa origen con nuestra divisa destino (list comprehension)
-        fx_symbol = [symbol for symbol in all_fx_symbol if from_ccy in symbol and to_ccy in symbol][0]
+        fx_symbols = [symbol for symbol in all_fx_symbol if from_ccy in symbol and to_ccy in symbol]
+        if not fx_symbols:
+            print(f"{Utils.dateprint()} - ERROR: No hay ningún par de divisas para convertir de {from_ccy} a {to_ccy}")
+            return 0.0
+        fx_symbol = fx_symbols[0]
+
+        # El símbolo debe estar en el MarketWatch para poder recuperar su tick
+        mt5.symbol_select(fx_symbol, True)
         fx_symbol_base = fx_symbol[:3]
 
         # Recuperamos los últimos datos disponibles del fx_symbol
@@ -70,7 +76,8 @@ class Utils():
         Returns the current date and time in the format "dd/mm/yyyy HH:MM:SS.sss".
         The timezone used is "Asia/Nicosia".
         """
-        return datetime.now(ZoneInfo("Asia/Nicosia")).strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]
+        # Hora local del ordenador (ZoneInfo("Asia/Nicosia") daba la hora de Chipre y en Windows requiere el paquete tzdata)
+        return datetime.now().strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]
 
 
 

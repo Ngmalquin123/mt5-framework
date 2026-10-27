@@ -69,14 +69,15 @@ class OrderExecutor():
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": order_event.symbol,
             "volume": order_event.volume,
-            'price': mt5.symbol_info(order_event.symbol).bid,
+            # Las compras se ejecutan al ask y las ventas al bid
+            'price': mt5.symbol_info(order_event.symbol).ask if order_event.signal == "BUY" else mt5.symbol_info(order_event.symbol).bid,
             "sl": order_event.sl,
             "tp": order_event.tp,
             "type": order_type,
             "deviation": 0,
             "magic": order_event.magic_number,
             "comment": "FWK Market Order",
-            "type_filling": mt5.ORDER_FILLING_FOK,
+            "type_filling": self._get_filling_mode(order_event.symbol),
         }
 
         # Mandamos el trade request para ser ejecutado
@@ -89,7 +90,7 @@ class OrderExecutor():
             self._create_and_put_execution_event(result)
         else:
             #Mandaremos un mensaje de error
-            print(f"{Utils.dateprint()} - Ha habido un error al ejecutar la Market Order {order_event.signal} para {order_event.symbol}: {result.comment}")
+            print(f"{Utils.dateprint()} - Ha habido un error al ejecutar la Market Order {order_event.signal} para {order_event.symbol}: {result.comment if result else mt5.last_error()}")
 
     def _send_pending_order(self, order_event: OrderEvent) -> None:
         """
@@ -124,7 +125,7 @@ class OrderExecutor():
             "deviation": 0,
             "magic": order_event.magic_number,
             "comment": "FWK Pnding Order",
-            "type_filling": mt5.ORDER_FILLING_FOK,
+            "type_filling": self._get_filling_mode(order_event.symbol),
             "type_time": mt5.ORDER_TIME_GTC
         }
 
@@ -138,7 +139,7 @@ class OrderExecutor():
             self._create_and_put_placed_pending_order_event(order_event)
         else:
             #Mandaremos un mensaje de error
-            print(f"{Utils.dateprint()} - Ha habido un error al colocar la orden pendiente {order_event.signal} {order_event.target_order} para {order_event.symbol}: {result.comment}")
+            print(f"{Utils.dateprint()} - Ha habido un error al colocar la orden pendiente {order_event.signal} {order_event.target_order} para {order_event.symbol}: {result.comment if result else mt5.last_error()}")
     
     def cancel_pending_order_by_ticket(self, ticket: int) -> None:
         """
@@ -151,12 +152,13 @@ class OrderExecutor():
             None
         """
         # Accedemos a la orden pendiente de interés
-        order = mt5.orders_get(ticket=ticket)[0]
+        orders = mt5.orders_get(ticket=ticket)
 
         # Verificamos que la orden exista
-        if order is None:
+        if not orders:
             print(f"{Utils.dateprint()} - ORD EXEC: No existe ninguna orden pendiente con el ticket {ticket}")
             return
+        order = orders[0]
         
         # Creamos el trade request para cancelar la orden pendiente
         cancel_request = {
@@ -173,7 +175,7 @@ class OrderExecutor():
             print(f"{Utils.dateprint()} - Orden pendiente con ticket {ticket} en {order.symbol} y volumen {order.volume_initial} se ha cancelado correctamente")
         else:
             # Mandaremos un mensaje de error
-            print(f"{Utils.dateprint()} - Ha habido un error al cancelar la orden {ticket} en {order.symbol} con volumen {order.volume_initial}: {result.comment}")
+            print(f"{Utils.dateprint()} - Ha habido un error al cancelar la orden {ticket} en {order.symbol} con volumen {order.volume_initial}: {result.comment if result else mt5.last_error()}")
     
     def close_position_by_ticket(self, ticket: int) -> None:
         """
@@ -186,12 +188,13 @@ class OrderExecutor():
             None
         """
         # Accedemos a la posición de interés
-        position = mt5.positions_get(ticket=ticket)[0]
+        positions = mt5.positions_get(ticket=ticket)
 
         # Verificamos que la posición exista
-        if position is None:
+        if not positions:
             print(f"{Utils.dateprint()} - ORD EXEC: No existe ninguna posición con el ticket {ticket}")
             return
+        position = positions[0]
         
         # Creamos el trade request para cerrar dicha posición
         close_request = {
@@ -199,9 +202,11 @@ class OrderExecutor():
             'position': position.ticket,
             'symbol': position.symbol,
             'volume': position.volume,
-            'price': mt5.symbol_info(position.symbol).bid,
+            # Cerrar una venta es comprar (al ask) y cerrar una compra es vender (al bid)
+            'price': mt5.symbol_info(position.symbol).ask if position.type == mt5.ORDER_TYPE_SELL else mt5.symbol_info(position.symbol).bid,
             'type': mt5.ORDER_TYPE_BUY if position.type == mt5.ORDER_TYPE_SELL else mt5.ORDER_TYPE_SELL,
-            'type_filling': mt5.ORDER_FILLING_FOK
+            'magic': position.magic,
+            'type_filling': self._get_filling_mode(position.symbol)
         }
 
         # Mandamos el close_request
@@ -214,7 +219,7 @@ class OrderExecutor():
             self._create_and_put_execution_event(result)
         else:
             # Mandaremos un mensaje de error
-            print(f"{Utils.dateprint()} - Ha habido un error al cerrar la posición {ticket} en {position.symbol} con volumen {position.volume}: {result.comment}")
+            print(f"{Utils.dateprint()} - Ha habido un error al cerrar la posición {ticket} en {position.symbol} con volumen {position.volume}: {result.comment if result else mt5.last_error()}")
     
     def close_strategy_long_positions_by_symbol(self, symbol: str) -> None:
         """
@@ -324,6 +329,27 @@ class OrderExecutor():
         # Colocar el execution event a la cola de eventos
         self.events_queue.put(execution_event)
 
+    def _get_filling_mode(self, symbol: str) -> int:
+        """
+        Returns the filling mode supported by the broker for the given symbol.
+
+        Args:
+            symbol (str): The symbol of the order.
+
+        Returns:
+            int: The MT5 filling mode (FOK, IOC or RETURN).
+        """
+        # filling_mode es una máscara de bits del símbolo: 1 = FOK, 2 = IOC. Si no admite ninguno usamos RETURN
+        symbol_info = mt5.symbol_info(symbol)
+        filling_mode = symbol_info.filling_mode if symbol_info is not None else 0
+
+        if filling_mode & 1:
+            return mt5.ORDER_FILLING_FOK
+        elif filling_mode & 2:
+            return mt5.ORDER_FILLING_IOC
+        else:
+            return mt5.ORDER_FILLING_RETURN
+
     def _check_execution_status(self, order_result) -> bool:
         """
         Checks the execution status of an order.
@@ -334,6 +360,11 @@ class OrderExecutor():
         Returns:
             bool: True if the execution status is successful, False otherwise.
         """
+        # order_send devuelve None si la petición ni siquiera llega al servidor
+        if order_result is None:
+            print(f"{Utils.dateprint()} - ORD EXEC: order_send no ha devuelto resultado. MT5 Error: {mt5.last_error()}")
+            return False
+
         if order_result.retcode == mt5.TRADE_RETCODE_DONE:
             # todo ha ido bien
             return True

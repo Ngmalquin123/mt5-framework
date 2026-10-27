@@ -46,6 +46,8 @@ class SignalMACrossover(ISignalGenerator):
 
         # Recuperamos los datos necesarios para calcular las medias móviles
         bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, self.slow_period)
+        if bars is None or len(bars) < self.slow_period:
+            return None
 
         # Recuperamos las posiciones abiertas por esta estrategia en el símbolo donde hemos tenido el Data Event
         open_positions = portfolio.get_number_of_strategy_open_positions_by_symbol(symbol)

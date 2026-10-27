@@ -3,6 +3,7 @@
 from .interfaces.notification_channel_interface import INotificationChannel
 from .properties.properties import TelegramNotificationProperties, NotificationChannelBaseProperties
 from .channels.telegram_notification_channel import TelegramNotificationChannel
+from utils.utils import Utils
 
 class NotificationService:
     
@@ -32,6 +33,10 @@ class NotificationService:
             Exception: If the selected communication channel does not exist.
         """
         if isinstance(properties, TelegramNotificationProperties):
+            # Sin token o chat_id desactivamos las notificaciones en lugar de detener el Framework
+            if not properties.token or not properties.chat_id:
+                print(f"{Utils.dateprint()} - AVISO: Faltan TELEGRAM_TOKEN o TELEGRAM_CHAT_ID en el .env. Notificaciones desactivadas.")
+                return None
             return TelegramNotificationChannel(properties)
         else:
             raise Exception("ERROR: El canal de comunicación seleccionado no existe")
@@ -44,4 +49,11 @@ class NotificationService:
             title (str): The title of the notification.
             message (str): The message of the notification.
         """
-        self._channel.send_message(title, message)
+        if self._channel is None:
+            return
+
+        # Un fallo de Telegram no debe detener el trading
+        try:
+            self._channel.send_message(title, message)
+        except Exception as e:
+            print(f"{Utils.dateprint()} - ERROR: No se ha podido enviar la notificación: {e}")

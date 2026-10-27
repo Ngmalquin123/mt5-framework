@@ -60,7 +60,11 @@ class SignalRSI(ISignalGenerator):
         average_loss = np.mean(losses[-self.rsi_period:])
 
         # Aplicamos formula RSI: RSI = 100 – [100 ÷ ( 1 + (Average Gain During Up Periods ÷ Average Loss During Down Periods ))]
-        rs = average_gain / average_loss if average_loss > 0 else 0
+        # Sin pérdidas el RSI es 100 (o 50 si tampoco hay ganancias). Antes devolvía 0 y daba señal de COMPRA en plena subida
+        if average_loss == 0:
+            return 100.0 if average_gain > 0 else 50.0
+
+        rs = average_gain / average_loss
         rsi = 100 - (100 / (1 + rs))
 
         return rsi
@@ -84,6 +88,8 @@ class SignalRSI(ISignalGenerator):
 
         # Recuperamos los datos necesarios para calcular el indicador del RSI
         bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, self.rsi_period + 1)
+        if bars is None or len(bars) < self.rsi_period + 1:
+            return None
 
         # Calculamos el RSI de las últimas velas
         rsi = self.compute_rsi(bars['close'])
@@ -93,6 +99,8 @@ class SignalRSI(ISignalGenerator):
 
         # Detectamos el último precio para calcular SL y TP
         last_tick = data_provider.get_latest_tick(symbol)
+        if not last_tick:
+            return None
         points = mt5.symbol_info(symbol).point
 
         # Detectar una señal de compra

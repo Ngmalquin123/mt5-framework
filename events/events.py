@@ -48,6 +48,8 @@ class BaseEvent(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+        # Guardamos el valor de los enums ("BUY") para que los mensajes no muestren "SignalType.BUY"
+        use_enum_values = True
 
 class DataEvent(BaseEvent):
     """

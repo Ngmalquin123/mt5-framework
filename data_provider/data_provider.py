@@ -73,8 +73,8 @@ class DataProvider():
 
         try:
             return timeframe_mapping[timeframe]
-        except:
-            print(f"{Utils.dateprint()} - Timeframe {timeframe} no es válido.")
+        except KeyError:
+            raise ValueError(f"Timeframe {timeframe} no es válido.")
     
     def get_latest_closed_bar(self, symbol: str, timeframe: str) -> pd.Series:
         """
@@ -165,6 +165,7 @@ class DataProvider():
         
         except Exception as e:
             print(f"{Utils.dateprint()} - No se han podido recuperar los datos de la última vela de {symbol} {timeframe} - MT5 Error: {mt5.last_error()}, exception: {e}")
+            return pd.DataFrame()
         
         else:
             # Si todo OK, devolvemos el dataframe con las num_bars
@@ -183,11 +184,12 @@ class DataProvider():
         try:
             tick = mt5.symbol_info_tick(symbol)
             if tick is None:
-                print(f"{Utils.dateprint()} - {Utils.dateprint()} - No se ha podido recuperar el último tick de {symbol} - MT5 error: {mt5.last_error()}")
+                print(f"{Utils.dateprint()} - No se ha podido recuperar el último tick de {symbol} - MT5 error: {mt5.last_error()}")
                 return {}
         
         except Exception as e:
             print(f"{Utils.dateprint()} - Algo no ha ido bien a la hora de recuperar el último tick de {symbol}. MT5 error: {mt5.last_error()}, exception: {e}")
+            return {}
         
         else:
             return tick._asdict()
@@ -205,7 +207,13 @@ class DataProvider():
         for symbol in self.symbols:
             latest_bar = self.get_latest_closed_bar(symbol, self.timeframe)
 
-            if latest_bar is None:
+            if latest_bar is None or latest_bar.empty:
+                continue
+
+            # La primera lectura de cada símbolo solo sirve de referencia: si el símbolo se acaba de añadir al
+            # MarketWatch, MT5 puede devolver una vela antigua antes de sincronizar el historial
+            if self.last_bar_datetime[symbol] == datetime.min:
+                self.last_bar_datetime[symbol] = latest_bar.name
                 continue
 
             if not latest_bar.empty and latest_bar.name > self.last_bar_datetime[symbol]:

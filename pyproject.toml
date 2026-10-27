@@ -1,0 +1,17 @@
+[project]
+name = "mt5-framework"
+version = "0.1.0"
+description = "Framework de trading algorítmico dirigido por eventos para MetaTrader 5"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "python-dotenv==1.0.0",
+    "pydantic==2.5.2",
+    "pandas==2.0.3",
+    "numpy==1.26.4",
+    "MetaTrader5==5.0.4424",
+    "python-telegram-bot==20.8",
+]
+
+[tool.uv]
+# MetaTrader5 solo existe para Windows: resolvemos las dependencias solo para Windows
+environments = ["sys_platform == 'win32'"]

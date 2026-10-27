@@ -13,8 +13,13 @@ from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRis
 from order_executor.order_executor import OrderExecutor
 from notifications.notifications import NotificationService, TelegramNotificationProperties
 from queue import Queue
+from dotenv import load_dotenv, find_dotenv
+import os
 
 if __name__ == "__main__":
+
+    # Cargamos las variables del .env (credenciales de MT5 y Telegram)
+    load_dotenv(find_dotenv())
 
     # Definición de variables necesarias para la estrategia
     symbols = ['EURUSD', 'USDJPY', 'GBPUSD']
@@ -64,8 +69,8 @@ if __name__ == "__main__":
     
     NOTIFICATIONS = NotificationService(
         properties=TelegramNotificationProperties(
-            token="INTRODUCE_TU_TELEGRAM_TOKEN_AQUÍ",
-            chat_id="INTRODUCE_TU_CHATID_AQUÍ",
+            token=os.getenv("TELEGRAM_TOKEN", ""),
+            chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
         )
     )
 
