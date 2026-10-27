@@ -9,7 +9,7 @@ from position_sizer.position_sizer import PositionSizer
 from position_sizer.properties.position_sizer_properties import MinSizingProps, FixedSizingProps, RiskPctSizingProps
 from portfolio.portfolio import Portfolio
 from risk_manager.risk_manager import RiskManager
-from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRiskProps
+from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRiskProps, TradingLimitsProps
 from order_executor.order_executor import OrderExecutor
 from notifications.notifications import NotificationService, TelegramNotificationProperties
 from queue import Queue
@@ -53,7 +53,8 @@ if __name__ == "__main__":
     PORTFOLIO = Portfolio(magic_number=magic_number)
 
     ORDER_EXECUTOR = OrderExecutor(events_queue=events_queue,
-                                    portfolio=PORTFOLIO)
+                                    portfolio=PORTFOLIO,
+                                    pending_order_max_age_minutes=60)
 
     SIGNAL_GENERATOR = SignalGenerator(events_queue=events_queue,
                                         data_provider=DATA_PROVIDER,
@@ -69,7 +70,12 @@ if __name__ == "__main__":
     RISK_MANAGER = RiskManager(events_queue=events_queue,
                                 data_provider=DATA_PROVIDER,
                                 portfolio=PORTFOLIO,
-                                risk_properties=MaxLeverageFactorRiskProps(max_leverage_factor=5))
+                                risk_properties=MaxLeverageFactorRiskProps(max_leverage_factor=5),
+                                trading_limits=TradingLimitsProps(max_daily_loss_pct=0.02,     # 2% del balance
+                                                                  max_open_positions=3,
+                                                                  max_spread_points=20,        # 2 pips en EURUSD
+                                                                  no_trading_start="23:45",    # hora del servidor
+                                                                  no_trading_end="01:15"))
     
     NOTIFICATIONS = NotificationService(
         properties=TelegramNotificationProperties(

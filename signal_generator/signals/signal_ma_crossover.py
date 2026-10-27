@@ -6,6 +6,7 @@ from ..interfaces.signal_generator_interface import ISignalGenerator
 from ..properties.signal_generator_properties import MACrossoverProps
 from portfolio.portfolio import Portfolio
 from order_executor.order_executor import OrderExecutor
+from utils.utils import Utils
 
 class SignalMACrossover(ISignalGenerator):
     
@@ -45,28 +46,46 @@ class SignalMACrossover(ISignalGenerator):
         symbol = data_event.symbol
 
         # Recuperamos los datos necesarios para calcular las medias móviles
-        bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, self.slow_period)
-        if bars is None or len(bars) < self.slow_period:
+        # Pedimos una vela más para poder calcular también las medias de la vela anterior
+        bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, self.slow_period + 1)
+        if bars is None or len(bars) < self.slow_period + 1:
             return None
 
         # Recuperamos las posiciones abiertas por esta estrategia en el símbolo donde hemos tenido el Data Event
         open_positions = portfolio.get_number_of_strategy_open_positions_by_symbol(symbol)
 
         # Calculamos el valor de los indicadores
-        fast_ma = bars['close'][-self.fast_period:].mean()
-        slow_ma = bars['close'].mean()
+        closes = bars['close']
+        fast_ma = closes.iloc[-self.fast_period:].mean()
+        slow_ma = closes.iloc[-self.slow_period:].mean()
+
+        # Medias de la vela anterior: solo hay señal en la vela en la que se produce el cruce.
+        # Antes había señal mientras una media estuviera por encima de la otra, y tras un SL se volvía a entrar enseguida
+        prev_fast_ma = closes.iloc[-self.fast_period - 1:-1].mean()
+        prev_slow_ma = closes.iloc[-self.slow_period - 1:-1].mean()
+
+        cross_up = prev_fast_ma <= prev_slow_ma and fast_ma > slow_ma
+        cross_down = prev_fast_ma >= prev_slow_ma and fast_ma < slow_ma
 
         # Detectar una señal de compra
-        if open_positions['LONG'] == 0 and fast_ma > slow_ma:
+        if open_positions['LONG'] == 0 and cross_up:
             if open_positions['SHORT'] > 0:
                 # Tenemos señal de compra, pero tenemos posición de venta. Debemos cerrar la venta ANTES de abrir la compra.
                 order_executor.close_strategy_short_positions_by_symbol(symbol)
+                # Si la venta no se ha podido cerrar, no abrimos la compra (quedarían las dos abiertas)
+                if portfolio.get_number_of_strategy_open_positions_by_symbol(symbol)['SHORT'] > 0:
+                    print(f"{Utils.dateprint()} - SIGNAL: No se han podido cerrar las ventas de {symbol}. No se abre la compra")
+                    return None
             signal = "BUY"
 
         # Señal de venta
-        elif open_positions['SHORT'] == 0 and slow_ma > fast_ma:
+        elif open_positions['SHORT'] == 0 and cross_down:
             if open_positions['LONG'] > 0:
                 order_executor.close_strategy_long_positions_by_symbol(symbol)
+                # Si la compra no se ha podido cerrar, no abrimos la venta (quedarían las dos abiertas)
+                if portfolio.get_number_of_strategy_open_positions_by_symbol(symbol)['LONG'] > 0:
+                    print(f"{Utils.dateprint()} - SIGNAL: No se han podido cerrar las compras de {symbol}. No se abre la venta")
+                    return None
             signal = "SELL"
 
         else:

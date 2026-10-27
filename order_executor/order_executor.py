@@ -11,16 +11,18 @@ from datetime import datetime
 
 class OrderExecutor():
 
-    def __init__(self, events_queue: Queue, portfolio: Portfolio) -> None:
+    def __init__(self, events_queue: Queue, portfolio: Portfolio, pending_order_max_age_minutes: float = 0) -> None:
         """
         Initialize the OrderExecutor object.
 
         Args:
             events_queue (Queue): The queue to receive events from.
             portfolio (Portfolio): The portfolio object to execute orders on.
+            pending_order_max_age_minutes (float, optional): Pending orders of the strategy older than this are cancelled. 0 = never.
         """
         self.events_queue = events_queue
         self.PORTFOLIO = portfolio
+        self.pending_order_max_age_minutes = pending_order_max_age_minutes
 
     def execute_order(self, order_event: OrderEvent) -> None:
         """
@@ -181,6 +183,30 @@ class OrderExecutor():
             # Mandaremos un mensaje de error
             print(f"{Utils.dateprint()} - Ha habido un error al cancelar la orden {ticket} en {order.symbol} con volumen {order.volume_initial}: {result.comment if result else mt5.last_error()}")
     
+    def cancel_expired_pending_orders(self) -> None:
+        """
+        Cancels the pending orders of the strategy older than pending_order_max_age_minutes.
+        It is done from the Framework (not with the broker expiration) so it works with any broker.
+
+        Returns:
+            None
+        """
+        if self.pending_order_max_age_minutes <= 0:
+            return
+
+        for order in mt5.orders_get() or ():
+            if order.magic != self.PORTFOLIO.magic:
+                continue
+
+            # Comparamos con la hora del servidor (la del último tick), igual que time_setup
+            tick = mt5.symbol_info_tick(order.symbol)
+            if tick is None:
+                continue
+
+            if tick.time - order.time_setup >= self.pending_order_max_age_minutes * 60:
+                print(f"{Utils.dateprint()} - ORD EXEC: La orden pendiente {order.ticket} en {order.symbol} ha caducado ({self.pending_order_max_age_minutes} min). Cancelando...")
+                self.cancel_pending_order_by_ticket(order.ticket)
+
     def close_position_by_ticket(self, ticket: int) -> None:
         """
         Closes a position by ticket number.

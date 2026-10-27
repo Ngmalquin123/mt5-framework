@@ -6,6 +6,7 @@ from ..interfaces.signal_generator_interface import ISignalGenerator
 from ..properties.signal_generator_properties import RSIProps
 from portfolio.portfolio import Portfolio
 from order_executor.order_executor import OrderExecutor
+from utils.utils import Utils
 import pandas as pd
 import numpy as np
 import MetaTrader5 as mt5
@@ -108,6 +109,10 @@ class SignalRSI(ISignalGenerator):
             if open_positions['SHORT'] > 0:
                 # Tenemos señal de compra, pero tenemos posición de venta. Debemos cerrar la venta ANTES de abrir la compra.
                 order_executor.close_strategy_short_positions_by_symbol(symbol)
+                # Si la venta no se ha podido cerrar, no abrimos la compra (quedarían las dos abiertas)
+                if portfolio.get_number_of_strategy_open_positions_by_symbol(symbol)['SHORT'] > 0:
+                    print(f"{Utils.dateprint()} - SIGNAL: No se han podido cerrar las ventas de {symbol}. No se abre la compra")
+                    return None
             signal = "BUY"
             sl = last_tick['ask'] - self.sl_points * points if self.sl_points > 0 else 0
             tp = last_tick['ask'] + self.tp_points * points if self.tp_points > 0 else 0
@@ -116,6 +121,10 @@ class SignalRSI(ISignalGenerator):
         elif open_positions['SHORT'] == 0 and rsi > self.rsi_upper:
             if open_positions['LONG'] > 0:
                 order_executor.close_strategy_long_positions_by_symbol(symbol)
+                # Si la compra no se ha podido cerrar, no abrimos la venta (quedarían las dos abiertas)
+                if portfolio.get_number_of_strategy_open_positions_by_symbol(symbol)['LONG'] > 0:
+                    print(f"{Utils.dateprint()} - SIGNAL: No se han podido cerrar las compras de {symbol}. No se abre la venta")
+                    return None
             signal = "SELL"
             sl = last_tick['bid'] + self.sl_points * points if self.sl_points > 0 else 0
             tp = last_tick['bid'] - self.tp_points * points if self.tp_points > 0 else 0

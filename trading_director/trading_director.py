@@ -57,6 +57,10 @@ class TradingDirector():
         self._last_connection_check: float = 0.0
         self._connected: bool = True
 
+        # Revisión periódica de órdenes pendientes caducadas
+        self.pending_orders_check_seconds: float = 30.0
+        self._last_pending_orders_check: float = 0.0
+
         # Creación del event handler
         self.event_handler: Dict[str, Callable] = {
             "DATA": self._handle_data_event,
@@ -259,6 +263,11 @@ class TradingDirector():
                     if not self._check_platform_connection():
                         time.sleep(1)
                         continue
+
+                    # Cancelamos las órdenes pendientes caducadas (cada pending_orders_check_seconds)
+                    if time.time() - self._last_pending_orders_check >= self.pending_orders_check_seconds:
+                        self._last_pending_orders_check = time.time()
+                        self.ORDER_EXECUTOR.cancel_expired_pending_orders()
 
                     try:
                         event = self.events_queue.get(block=False)    # Recordar que es una cola FIFO
