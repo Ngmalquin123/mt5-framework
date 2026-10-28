@@ -75,4 +75,5 @@ def test_batch_runs_each_timeframe_and_period(tmp_path, monkeypatch):
     assert rows[0]["error"] == "sin datos"
     # Los dos backtests de 1h se ejecutan seguidos en el mismo proceso, cada uno con su periodo
     assert rows[2]["stats"]["trades"] > 0 and rows[3]["stats"]["trades"] > 0
+    assert rows[2]["stats"]["first_bar"].startswith("2025-01-02") and rows[3]["stats"]["first_bar"].startswith("2025-01-14")
     assert len(list((tmp_path / "backtest" / "results").glob("batch_*_1h_*_trades.csv"))) == 2

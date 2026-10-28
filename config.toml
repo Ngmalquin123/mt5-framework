@@ -6,7 +6,7 @@
 symbols = ["EURUSD", "USDJPY", "GBPUSD"]
 timeframe = "1min"              # 1min, 5min, 15min, 30min, 1h, 4h, 1d...
 magic_number = 12345
-strategy = "rsi"                # Estrategia activa: "rsi", "rsi_trend" o "ma_crossover"
+strategy = "rsi"                # Estrategia activa: "rsi", "rsi_trend", "ma_crossover" o "session_breakout"
 
 # ---------------- Estrategias
 # SL y TP: en puntos fijos (sl_points / tp_points) o en múltiplos del ATR (sl_atr / tp_atr).
@@ -39,6 +39,22 @@ atr_period = 14
 [strategies.ma_crossover]
 fast_period = 5
 slow_period = 10
+sl_points = 0
+tp_points = 0
+sl_atr = 0.0
+tp_atr = 0.0
+atr_period = 14
+
+# Ruptura de sesión: rango de la sesión asiática y su ruptura en la apertura de Londres.
+# Horas del SERVIDOR (RoboForex: las 10:00 del servidor son la apertura de Londres todo el año).
+# Como mucho una operación por símbolo y día. Timeframes intradía (de 1min a 4h)
+[strategies.session_breakout]
+range_start = "02:00"           # inicio del rango
+range_end = "10:00"             # fin del rango: desde aquí se buscan rupturas
+entry_end = "14:00"             # a partir de aquí no se abren operaciones nuevas
+close_time = "22:00"            # se cierra lo que siga abierto ("" = no cerrar)
+sl_at_range = true              # SL en el lado contrario del rango (false = usar sl_points / sl_atr)
+tp_range_mult = 1.0             # TP a 1 altura del rango desde la entrada (0 = usar tp_points / tp_atr)
 sl_points = 0
 tp_points = 0
 sl_atr = 0.0

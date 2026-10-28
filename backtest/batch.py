@@ -57,10 +57,15 @@ def print_table(config: FrameworkConfig, rows: list) -> None:
     print("")
     print(f" {config.summary()}")
     print("=" * 96)
-    print(f" {'timeframe':<10} {'periodo':<13} {'resultado':>10} {'PF':>6} {'drawdown':>9} {'operac.':>8} {'% acierto':>10}   desde - hasta")
+    print(f" {'timeframe':<10} {'periodo':<13} {'resultado':>10} {'PF':>6} {'drawdown':>9} {'operac.':>8} {'% acierto':>10}   datos usados")
     print("-" * 96)
     for row in rows:
         dates = f"{row['start'] or ''} - {row['end'] or ''}"
+        if "stats" in row:
+            # Fechas de los datos realmente usados (el broker puede no tener historial desde la fecha pedida)
+            dates = f"{row['stats']['first_bar'][:10]} - {row['stats']['last_bar'][:10]}"
+            if row["start"] and row["stats"]["first_bar"][:10] > row["start"]:
+                dates += "  (datos desde más tarde)"
         if "error" in row:
             print(f" {row['timeframe']:<10} {row['period']:<13} {row['error']:>48}   {dates}")
             continue

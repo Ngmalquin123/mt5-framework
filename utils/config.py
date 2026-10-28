@@ -1,7 +1,8 @@
 # Lectura de config.toml: convierte cada sección en las properties que usan los módulos del Framework.
 # No importa MetaTrader5, así backtest_app.py puede leer la configuración antes de activar el MT5 simulado.
 
-from signal_generator.properties.signal_generator_properties import BaseSignalProps, MACrossoverProps, RSIProps, RSITrendProps
+from signal_generator.properties.signal_generator_properties import (BaseSignalProps, MACrossoverProps, RSIProps, RSITrendProps,
+                                                                     SessionBreakoutProps)
 from position_sizer.properties.position_sizer_properties import BaseSizerProps, MinSizingProps, FixedSizingProps, RiskPctSizingProps
 from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRiskProps, TradingLimitsProps
 import tomllib
@@ -9,7 +10,8 @@ import tomllib
 
 class FrameworkConfig():
 
-    STRATEGIES = {"rsi": RSIProps, "rsi_trend": RSITrendProps, "ma_crossover": MACrossoverProps}
+    STRATEGIES = {"rsi": RSIProps, "rsi_trend": RSITrendProps, "ma_crossover": MACrossoverProps,
+                  "session_breakout": SessionBreakoutProps}
 
     def __init__(self, path: str = "config.toml"):
         """

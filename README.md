@@ -57,7 +57,7 @@ Así lo que pruebas es exactamente lo que se ejecuta.
 
 | Sección | Qué contiene |
 |---|---|
-| `[trading]` | símbolos, timeframe, magic number y estrategia activa (`rsi`, `rsi_trend` o `ma_crossover`) |
+| `[trading]` | símbolos, timeframe, magic number y estrategia activa (`rsi`, `rsi_trend`, `ma_crossover` o `session_breakout`) |
 | `[strategies.*]` | parámetros de cada estrategia y su SL/TP |
 | `[sizing]` | volumen fijo, mínimo o por % de riesgo |
 | `[risk]` / `[limits]` | apalancamiento máximo y límites generales |
@@ -68,6 +68,8 @@ Así lo que pruebas es exactamente lo que se ejecuta.
 - `rsi`: RSI de reversión a la media.
 - `rsi_trend`: RSI que solo compra por encima de una media larga y solo vende por debajo, es decir, solo a favor de la tendencia.
 - `ma_crossover`: cruce de medias.
+- `session_breakout`: ruptura del rango de la sesión asiática en la apertura de Londres (horas del servidor).
+  Como mucho una operación por par y día; cierra a una hora fija.
 
 **SL/TP por ATR.** Con `sl_atr = 1.5` y `tp_atr = 3.0`, los stops se ponen a 1.5 y 3 veces el
 rango medio de las velas. Se adaptan solos al timeframe, al símbolo y a la volatilidad.

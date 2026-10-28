@@ -85,6 +85,9 @@ class Backtester():
             trades = self.TRADE_JOURNAL.update(0, sys.maxsize)
 
         stats = self.compute_stats(trades, self.SIM.equity_curve, self.SIM.initial_balance)
+        # Fechas reales simuladas (pueden empezar más tarde de lo pedido si el broker no tiene tanto historial)
+        stats["first_bar"] = self._format_time(self.SIM.timeline[0])
+        stats["last_bar"] = self._format_time(self.SIM.timeline[-1])
         self._save_equity_curve()
         self.print_report(stats)
         return stats

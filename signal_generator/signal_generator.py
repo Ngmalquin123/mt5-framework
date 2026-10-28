@@ -2,10 +2,11 @@
 
 from events.events import DataEvent
 from .interfaces.signal_generator_interface import ISignalGenerator
-from .properties.signal_generator_properties import BaseSignalProps, MACrossoverProps, RSIProps, RSITrendProps
+from .properties.signal_generator_properties import BaseSignalProps, MACrossoverProps, RSIProps, RSITrendProps, SessionBreakoutProps
 from .signals.signal_ma_crossover import SignalMACrossover
 from .signals.signal_rsi_mr import SignalRSI
 from .signals.signal_rsi_trend import SignalRSITrend
+from .signals.signal_session_breakout import SignalSessionBreakout
 from data_provider.data_provider import DataProvider
 from portfolio.portfolio import Portfolio
 from order_executor.order_executor import OrderExecutor
@@ -53,6 +54,9 @@ class SignalGenerator(ISignalGenerator):
 
         elif isinstance(signal_props, RSIProps):
             return SignalRSI(properties=signal_props)
+
+        elif isinstance(signal_props, SessionBreakoutProps):
+            return SignalSessionBreakout(properties=signal_props)
         
         else:
             raise Exception(f"ERROR: Método de generación de señales desconocido: {signal_props}")

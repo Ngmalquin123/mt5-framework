@@ -56,3 +56,26 @@ class RSITrendProps(RSIProps):
         (plus all the parameters of RSIProps)
     """
     trend_period: int = 200
+
+class SessionBreakoutProps(StopLevelsProps):
+    """
+    Breakout of the range of a session (by default the Asian session, at the London open).
+    All the hours are SERVER time ("HH:MM").
+
+    Attributes:
+        timeframe (str): Timeframe of the bars (intraday: 1min to 4h).
+        range_start (str): Start of the session that forms the range.
+        range_end (str): End of the range. From here the breakouts are traded.
+        entry_end (str): No new entries from this hour.
+        close_time (str): The open positions are closed at this hour. "" = they are not closed.
+        sl_at_range (bool): If True, the SL is placed at the opposite side of the range (instead of points/ATR).
+        tp_range_mult (float): If > 0, TP at this multiple of the range height from the entry (instead of points/ATR).
+        (plus the SL/TP parameters of StopLevelsProps, used when sl_at_range is False or tp_range_mult is 0)
+    """
+    timeframe: str
+    range_start: str = "02:00"
+    range_end: str = "10:00"
+    entry_end: str = "14:00"
+    close_time: str = "22:00"
+    sl_at_range: bool = True
+    tp_range_mult: float = 1.0
