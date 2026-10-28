@@ -45,3 +45,14 @@ class RSIProps(StopLevelsProps):
     rsi_lower: float
     sl_points: int
     tp_points: int
+
+class RSITrendProps(RSIProps):
+    """
+    RSI with a trend filter: only buys when the price is above the moving average of trend_period bars
+    (buying the pullbacks of an uptrend) and only sells when it is below.
+
+    Attributes:
+        trend_period (int): Bars of the moving average that defines the trend (e.g. 200).
+        (plus all the parameters of RSIProps)
+    """
+    trend_period: int = 200

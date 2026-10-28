@@ -6,7 +6,7 @@
 symbols = ["EURUSD", "USDJPY", "GBPUSD"]
 timeframe = "1min"              # 1min, 5min, 15min, 30min, 1h, 4h, 1d...
 magic_number = 12345
-strategy = "rsi"                # Estrategia activa: "rsi" o "ma_crossover"
+strategy = "rsi"                # Estrategia activa: "rsi", "rsi_trend" o "ma_crossover"
 
 # ---------------- Estrategias
 # SL y TP: en puntos fijos (sl_points / tp_points) o en múltiplos del ATR (sl_atr / tp_atr).
@@ -22,6 +22,19 @@ tp_points = 100
 sl_atr = 0.0                    # p.ej. 1.5 -> SL a 1.5 veces el ATR
 tp_atr = 0.0                    # p.ej. 3.0 -> TP a 3 veces el ATR
 atr_period = 14                 # velas para calcular el ATR
+
+# RSI con filtro de tendencia: solo compra si el precio está por encima de la media de trend_period velas
+# (compra los retrocesos de una subida) y solo vende si está por debajo
+[strategies.rsi_trend]
+rsi_period = 14
+rsi_upper = 70.0
+rsi_lower = 30.0
+trend_period = 200
+sl_points = 0
+tp_points = 0
+sl_atr = 2.0
+tp_atr = 4.0
+atr_period = 14
 
 [strategies.ma_crossover]
 fast_period = 5
@@ -61,6 +74,7 @@ file = "logs/trades.csv"
 [backtest]
 start = "2025-01-01"
 end = "2026-10-01"
+split = "2026-01-01"            # pruebas en lote: práctica de start a split y comprobación de split a end
 data_dir = "backtest/data"
 initial_balance = 10000.0
 account_currency = "USD"

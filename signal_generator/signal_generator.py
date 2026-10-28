@@ -2,9 +2,10 @@
 
 from events.events import DataEvent
 from .interfaces.signal_generator_interface import ISignalGenerator
-from .properties.signal_generator_properties import BaseSignalProps, MACrossoverProps, RSIProps
+from .properties.signal_generator_properties import BaseSignalProps, MACrossoverProps, RSIProps, RSITrendProps
 from .signals.signal_ma_crossover import SignalMACrossover
 from .signals.signal_rsi_mr import SignalRSI
+from .signals.signal_rsi_trend import SignalRSITrend
 from data_provider.data_provider import DataProvider
 from portfolio.portfolio import Portfolio
 from order_executor.order_executor import OrderExecutor
@@ -46,6 +47,10 @@ class SignalGenerator(ISignalGenerator):
         if isinstance(signal_props, MACrossoverProps):
             return SignalMACrossover(properties=signal_props)
         
+        # RSITrendProps antes que RSIProps: es una clase hija y también sería un RSIProps
+        elif isinstance(signal_props, RSITrendProps):
+            return SignalRSITrend(properties=signal_props)
+
         elif isinstance(signal_props, RSIProps):
             return SignalRSI(properties=signal_props)
         

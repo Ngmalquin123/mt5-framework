@@ -57,12 +57,17 @@ Así lo que pruebas es exactamente lo que se ejecuta.
 
 | Sección | Qué contiene |
 |---|---|
-| `[trading]` | símbolos, timeframe, magic number y estrategia activa (`rsi` o `ma_crossover`) |
+| `[trading]` | símbolos, timeframe, magic number y estrategia activa (`rsi`, `rsi_trend` o `ma_crossover`) |
 | `[strategies.*]` | parámetros de cada estrategia y su SL/TP |
 | `[sizing]` | volumen fijo, mínimo o por % de riesgo |
 | `[risk]` / `[limits]` | apalancamiento máximo y límites generales |
 | `[orders]` / `[journal]` | caducidad de las órdenes pendientes y archivo del diario |
-| `[backtest]` | periodo, balance inicial, comisión y spread del backtest |
+| `[backtest]` | periodo, fecha de corte práctica/comprobación (`split`), balance inicial, comisión y spread |
+
+**Estrategias:**
+- `rsi`: RSI de reversión a la media.
+- `rsi_trend`: RSI que solo compra por encima de una media larga y solo vende por debajo, es decir, solo a favor de la tendencia.
+- `ma_crossover`: cruce de medias.
 
 **SL/TP por ATR.** Con `sl_atr = 1.5` y `tp_atr = 3.0`, los stops se ponen a 1.5 y 3 veces el
 rango medio de las velas. Se adaptan solos al timeframe, al símbolo y a la volatilidad.
@@ -90,6 +95,13 @@ uv run backtest_app.py
 uv run backtest_app.py pruebas.toml      # otra configuración, sin tocar la del real
 ```
 El informe se muestra al terminar. Las operaciones y la curva de equity se guardan en `backtest/results/`.
+
+**Pruebas en lote.** Lanza la misma configuración en varios timeframes, cada uno con un periodo de práctica
+(de `start` a `split`) y otro de comprobación (de `split` a `end`), y muestra una tabla resumen:
+```
+uv run python -m backtest.batch pruebas.toml --timeframes 5min 15min 30min 1h
+```
+Necesita los datos descargados de cada timeframe; la tabla indica cuáles faltan.
 
 Cómo simula el precio:
 - SL y TP se comprueban con el máximo y el mínimo de cada vela.
@@ -121,7 +133,7 @@ portfolio/               posiciones abiertas de la estrategia
 trade_journal/           diario de operaciones y resumen diario
 notifications/           Telegram
 platform_connector/      conexión con MT5
-backtest/                MT5 simulado, motor del backtest y descarga de datos
+backtest/                MT5 simulado, motor del backtest, pruebas en lote y descarga de datos
 tests/                   tests automáticos (con MT5 simulado)
 ```
 

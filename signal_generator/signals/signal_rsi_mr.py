@@ -43,6 +43,22 @@ class SignalRSI(ISignalGenerator):
         
         # SL y TP en puntos fijos o en múltiplos del ATR
         self.stops = StopLevels(properties)
+
+        # Velas cerradas que necesita la estrategia (las clases hijas pueden necesitar más)
+        self.min_bars = self.rsi_period + 1
+
+    def _allowed_directions(self, bars: pd.DataFrame) -> tuple:
+        """
+        Filter of the entries. The basic RSI allows both directions; child classes can limit them
+        (e.g. only buys in an uptrend).
+
+        Args:
+            bars (pd.DataFrame): The closed bars of the symbol.
+
+        Returns:
+            tuple: (allow_buy, allow_sell).
+        """
+        return True, True
     
 
     def compute_rsi(self, prices: pd.Series) -> float:
@@ -83,7 +99,7 @@ class SignalRSI(ISignalGenerator):
 
         # Recuperamos los datos necesarios para calcular el indicador del RSI
         # (también las necesarias para el ATR si los stops lo usan)
-        num_bars = max(self.rsi_period + 1, self.stops.bars_needed)
+        num_bars = max(self.min_bars, self.stops.bars_needed)
         bars = data_provider.get_latest_closed_bars(symbol, self.timeframe, num_bars)
         if bars is None or len(bars) < num_bars:
             return None
@@ -100,8 +116,11 @@ class SignalRSI(ISignalGenerator):
             return None
         points = mt5.symbol_info(symbol).point
 
+        # Direcciones permitidas por el filtro de la estrategia
+        allow_buy, allow_sell = self._allowed_directions(bars)
+
         # Detectar una señal de compra
-        if open_positions['LONG'] == 0 and rsi < self.rsi_lower:
+        if allow_buy and open_positions['LONG'] == 0 and rsi < self.rsi_lower:
             if open_positions['SHORT'] > 0:
                 # Tenemos señal de compra, pero tenemos posición de venta. Debemos cerrar la venta ANTES de abrir la compra.
                 order_executor.close_strategy_short_positions_by_symbol(symbol)
@@ -112,7 +131,7 @@ class SignalRSI(ISignalGenerator):
             signal = "BUY"
 
         # Señal de venta
-        elif open_positions['SHORT'] == 0 and rsi > self.rsi_upper:
+        elif allow_sell and open_positions['SHORT'] == 0 and rsi > self.rsi_upper:
             if open_positions['LONG'] > 0:
                 order_executor.close_strategy_long_positions_by_symbol(symbol)
                 # Si la compra no se ha podido cerrar, no abrimos la venta (quedarían las dos abiertas)

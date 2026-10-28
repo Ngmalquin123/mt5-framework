@@ -230,7 +230,9 @@ class SimulatedMT5():
                 current = getattr(module, "mt5", None) if isinstance(module, types.ModuleType) else None
             except Exception:
                 continue
-            if current is not None and current is not self and getattr(current, "__name__", "") == "MetaTrader5":
+            # El MT5 real (o el de los tests) o un MT5 simulado de un backtest anterior
+            is_mt5 = getattr(current, "__name__", "") == "MetaTrader5" or isinstance(current, SimulatedMT5)
+            if current is not None and current is not self and is_mt5:
                 self._saved_modules.append((module, current))
                 module.mt5 = self
 
