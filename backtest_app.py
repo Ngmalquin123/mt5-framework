@@ -10,12 +10,18 @@
 
 from backtest.runner import run_backtest
 from utils.config import FrameworkConfig
-import sys
+import argparse
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser(
+        description="Backtest de una configuración en su timeframe y periodo",
+        epilog="Para varios timeframes (--timeframes) usa: uv run python -m backtest.batch pruebas.toml --timeframes 5min 15min")
+    parser.add_argument("config", nargs="?", default="config.toml", help="Archivo de configuración (por defecto config.toml)")
+    args = parser.parse_args()
+
     # Misma configuración que el real. Lo propio del backtest (fechas, balance, comisión) está en [backtest]
-    CONFIG = FrameworkConfig(sys.argv[1] if len(sys.argv) > 1 else "config.toml")
+    CONFIG = FrameworkConfig(args.config)
     print(CONFIG.summary())
 
     run_backtest(CONFIG)
