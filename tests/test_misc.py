@@ -77,3 +77,27 @@ def test_logger_writes_daily_file(tmp_path, monkeypatch):
 
     log_files = list(tmp_path.glob("trading_*.log"))
     assert len(log_files) == 1 and "hola log" in log_files[0].read_text(encoding="utf-8")
+
+
+# ---------------- Descarga de datos para el backtest
+def test_download_in_chunks_joins_without_duplicates(monkeypatch):
+    from datetime import datetime, timezone
+    import numpy as np
+    from backtest import download_data
+
+    requests = []
+
+    def fake_copy_rates_range(symbol, tf, date_from, date_to):
+        requests.append((date_from, date_to))
+        # Una vela por día, incluidos los dos extremos (como MT5, que repite la vela del borde)
+        days = np.arange(int(date_from.timestamp()), int(date_to.timestamp()) + 1, 86400)
+        dtype = np.dtype([('time', 'i8'), ('open', 'f8'), ('high', 'f8'), ('low', 'f8'), ('close', 'f8'),
+                          ('tick_volume', 'i8'), ('spread', 'i4'), ('real_volume', 'i8')])
+        return np.array([(t, 1.1, 1.1, 1.1, 1.1, 1, 1, 0) for t in days], dtype=dtype)
+
+    monkeypatch.setattr(download_data.mt5, "copy_rates_range", fake_copy_rates_range, raising=False)
+    bars = download_data.download_symbol_rates("EURUSD", 0, datetime(2025, 1, 1, tzinfo=timezone.utc),
+                                               datetime(2025, 4, 1, tzinfo=timezone.utc))
+
+    assert len(requests) == 3                      # 90 días en trozos de 30
+    assert len(bars) == 91 and bars['time'].is_unique and bars['time'].is_monotonic_increasing
