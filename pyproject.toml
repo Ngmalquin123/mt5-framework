@@ -10,6 +10,7 @@ dependencies = [
     "numpy==1.26.4",
     "MetaTrader5==5.0.4424",
     "python-telegram-bot==20.8",
+    "tzdata>=2025.2",               # zonas horarias para zoneinfo (Windows no las trae)
 ]
 
 [tool.uv]

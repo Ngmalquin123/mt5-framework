@@ -126,6 +126,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot" },
+    { name = "tzdata" },
 ]
 
 [package.dev-dependencies]
@@ -141,6 +142,7 @@ requires-dist = [
     { name = "pydantic", specifier = "==2.5.2" },
     { name = "python-dotenv", specifier = "==1.0.0" },
     { name = "python-telegram-bot", specifier = "==20.8" },
+    { name = "tzdata", specifier = ">=2025.2" },
 ]
 
 [package.metadata.requires-dev]

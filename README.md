@@ -113,6 +113,12 @@ Cómo simula el precio:
 
 Para no adaptar los parámetros al pasado, elígelos con un periodo y compruébalos después en otro distinto.
 
+**Comprobar los datos del broker** (zona horaria del servidor, y que las velas M15/H1 construidas a partir de M5
+coinciden con las de MT5). Necesita M5, M15 y H1 descargados:
+```
+uv run python -m backtest.check_data --symbols EURUSD GBPUSD
+```
+
 **Tests:**
 ```
 uv run pytest
@@ -128,6 +134,7 @@ backtest_app.py          arranque del backtest
 trading_director/        bucle principal de eventos, tareas periódicas, avisos
 data_provider/           velas y ticks
 signal_generator/        estrategias (RSI, cruce de medias) y SL/TP (stop_levels.py)
+market_structure/        estructura de mercado: swings, HH/HL/LH/LL, tendencia, BOS y CHoCH; velas M15/H1 desde M5; horas de sesión
 position_sizer/          tamaño de las posiciones
 risk_manager/            apalancamiento máximo y límites de riesgo
 order_executor/          envío y cierre de órdenes
