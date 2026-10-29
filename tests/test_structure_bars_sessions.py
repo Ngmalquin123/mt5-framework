@@ -114,3 +114,27 @@ def test_check_data_detects_the_server_timezone(capsys):
     assert "Europe/Athens            4 de 4" in out
     # «Nueva York + 7» solo coincide la semana del 29: en las tres semanas desfasadas de marzo falla
     assert "America/New_York+7       1 de 4" in out
+
+
+# ---------------- Zona horaria real de RoboForex (comprobada con check_data): Nueva York + 7 h
+ROBOFOREX = "America/New_York+7"
+
+
+def test_roboforex_new_york_window_and_close_are_fixed_in_server_time():
+    for day in ((2026, 1, 15), (2026, 3, 16), (2026, 7, 15), (2026, 10, 27)):
+        assert not in_windows(server(*day, 14, 55), ROBOFOREX, [NEW_YORK])
+        assert in_windows(server(*day, 15), ROBOFOREX, [NEW_YORK])
+        assert not in_windows(server(*day, 18), ROBOFOREX, [NEW_YORK])
+        close = local_time(server(*day, 23), ROBOFOREX, "America/New_York")
+        assert (close.hour, close.minute) == (16, 0)
+
+
+def test_roboforex_london_window_moves_one_hour_when_us_and_europe_differ():
+    for day in ((2026, 1, 15), (2026, 7, 15)):
+        assert in_windows(server(*day, 10), ROBOFOREX, [LONDON])
+        assert not in_windows(server(*day, 14), ROBOFOREX, [LONDON])
+    for day in ((2026, 3, 16), (2026, 10, 27)):          # EE. UU. y Europa con distinto horario
+        assert not in_windows(server(*day, 10, 55), ROBOFOREX, [LONDON])
+        assert in_windows(server(*day, 11), ROBOFOREX, [LONDON])
+        assert in_windows(server(*day, 14, 55), ROBOFOREX, [LONDON])
+        assert not in_windows(server(*day, 15), ROBOFOREX, [LONDON])
