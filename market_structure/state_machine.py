@@ -101,19 +101,25 @@ class SetupMachine():
         if self.state == SENAL:
             self._go(time, self._idle_state(), reason)
 
-    def sync_position(self, time: int, has_position: bool) -> None:
+    def sync_position(self, time: int, has_position: bool, opened_and_closed: bool = False) -> None:
         """
         Updates the state with the open positions of the symbol (§10). Called before each new bar.
 
         Args:
             time (int): Current server time.
             has_position (bool): True if the strategy has an open position in this symbol.
+            opened_and_closed (bool): True if the order of the signal opened a position that is already closed
+                (it touched the SL or the TP in the same M5 bar in which it opened).
         """
         if has_position and self.state != EN_POSICION:
             # Orden ejecutada y verificada (EN-4) o, al reiniciar, posición que ya estaba abierta
             reason = "EN-4: orden ejecutada" if self.state == SENAL else "posición abierta al arrancar"
             self.setup = None
             self._go(time, EN_POSICION, reason)
+        elif not has_position and self.state == SENAL and opened_and_closed:
+            self.setup = None
+            self._go(time, EN_POSICION, "EN-4: orden ejecutada")
+            self._go(time, self._idle_state(), "ST-11: posición cerrada en la misma vela M5 en que se abrió")
         elif not has_position and self.state == SENAL:
             self._go(time, self._idle_state(), "EN-3/EN-4: la señal no llegó a abrir posición (riesgo o broker)")
         elif not has_position and self.state == EN_POSICION:

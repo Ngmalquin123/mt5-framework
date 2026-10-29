@@ -57,6 +57,7 @@ class SignalMarketStructure(ISignalGenerator):
         self.machines: Dict[str, SetupMachine] = {}
         self.last_bar_time: Dict[str, int] = {}
         self.last_signal_time = None        # RG-2: dos pares con señal en la misma vela → gana el primero de symbols
+        self.sent_time: Dict[str, int] = {}     # hora de la última señal enviada de cada símbolo
         self.account_checked = False
 
     # ---------------- Señal
@@ -89,7 +90,11 @@ class SignalMarketStructure(ISignalGenerator):
             order_executor.close_strategy_short_positions_by_symbol(symbol)
 
         machine = self._machine(symbol)
-        machine.sync_position(now, bool(self._own_positions(portfolio, symbol)))
+        has_position = bool(self._own_positions(portfolio, symbol))
+        # Una posición que se abre y se cierra dentro de la misma vela M5 no se llega a ver abierta: se busca en el historial
+        opened_and_closed = (not has_position and machine.state == SENAL
+                             and self._opened_since(symbol, portfolio.magic, self.sent_time.get(symbol, now), now))
+        machine.sync_position(now, has_position, opened_and_closed)
 
         # Velas M5 nuevas. Al arrancar se leen warmup_days de historial; una señal de una vela que no es la última no vale
         bars = self._new_bars(symbol, data_provider, now)
@@ -151,6 +156,7 @@ class SignalMarketStructure(ISignalGenerator):
             return None
 
         self.last_signal_time = now
+        self.sent_time[symbol] = now
         machine.log.append((now, SENAL, SENAL, f"EN-1: {signal.direction} a {entry:.{digits}f}, SL {sl:.{digits}f}, TP {tp:.{digits}f}"))
         print(f"{Utils.dateprint()} - SIGNAL: {signal.direction} {symbol} a {entry:.{digits}f} | SL {sl:.{digits}f} | TP {tp:.{digits}f} "
               f"(ruptura M15 {signal.level:.{digits}f}, HL/LH M5 {signal.stop_swing:.{digits}f})")
@@ -187,6 +193,11 @@ class SignalMarketStructure(ISignalGenerator):
     @staticmethod
     def _own_positions(portfolio: Portfolio, symbol: str) -> list:
         return [p for p in portfolio.get_strategy_open_positions() if p.symbol == symbol]
+
+    @staticmethod
+    def _opened_since(symbol: str, magic: int, since: int, now: int) -> bool:
+        deals = mt5.history_deals_get(since, now + 60) or ()
+        return any(d.symbol == symbol and d.magic == magic and d.entry == mt5.DEAL_ENTRY_IN for d in deals)
 
     def _after_intraday_close(self, now: int) -> bool:
         return local_time(now, self.props.server_timezone, "America/New_York").time() >= self.intraday_close

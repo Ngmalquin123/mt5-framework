@@ -224,3 +224,14 @@ def test_analysis_of_the_backtest(tmp_path, monkeypatch, capsys):
     funnel = tables["funnel"].loc["EURUSD"]
     assert (funnel["señales"], funnel["enviadas"], funnel["ejecutadas"]) == (1, 1, 1)
     assert "1 operaciones" in capsys.readouterr().out
+
+
+def test_position_opened_and_closed_in_the_same_bar(tmp_path, monkeypatch):
+    # La vela de la entrada (11:55) baja hasta 1.1040: el SL 1.1062 salta dentro de ella y la posición nunca se ve abierta.
+    # Es una orden ejecutada (EN-4) y cerrada (ST-11), no una señal que no llegó a abrir posición
+    day = [p for p in BULL_DAY if p[0] <= "11:50"] + [("11:55", 1.1040), ("13:00", 1.1030)]
+    stats = backtest(tmp_path, monkeypatch, {"EURUSD": m5_bars(waypoints(BULL_H1, day))})
+    (trade,) = stats["trade_rows"]
+    assert trade["entry_time"] == "2026-09-17 11:55:00" and trade["exit_reason"] == "SL"
+    assert has_reason(stats, "EN-4") and has_reason(stats, "ST-11: posición cerrada en la misma vela")
+    assert not has_reason(stats, "EN-3/EN-4")
