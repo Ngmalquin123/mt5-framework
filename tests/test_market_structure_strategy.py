@@ -209,3 +209,18 @@ def test_needs_5min():
         SignalMarketStructure(MarketStructureProps(timeframe="15min"))
     with pytest.raises(Exception):
         SignalMarketStructure(MarketStructureProps(timeframe="5min", sessions=[("Europe/Londres", "08:00", "12:00")]))
+
+
+def test_analysis_of_the_backtest(tmp_path, monkeypatch, capsys):
+    # backtest.analyze_trades lee los dos CSV: la operación de la imagen 1 es un TP de 2R en la sesión de Londres
+    from backtest.analyze_trades import analyze
+    backtest(tmp_path, monkeypatch, {"EURUSD": m5_bars(waypoints(BULL_H1, BULL_DAY))})
+    tables = analyze("test", "backtest/results", "estructura.toml")
+
+    (trade,) = tables["trades"].to_dict("records")
+    assert trade["sl"] == 1.1062 and trade["r"] == pytest.approx(2.0)
+    assert (trade["sesión"], trade["hora NY"], trade["día"]) == ("Londres", "04h", "jueves")
+    assert tables["exit_reason"].loc["TP", "ops"] == 1 and tables["exit_reason"].loc["TP", "R total"] == 2.0
+    funnel = tables["funnel"].loc["EURUSD"]
+    assert (funnel["señales"], funnel["enviadas"], funnel["ejecutadas"]) == (1, 1, 1)
+    assert "1 operaciones" in capsys.readouterr().out

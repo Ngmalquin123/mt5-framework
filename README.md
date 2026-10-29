@@ -104,6 +104,8 @@ uv run backtest_app.py estructura.toml   # estrategia market_structure (necesita
 El informe se muestra al terminar. Las operaciones y la curva de equity se guardan en `backtest/results/`.
 Con `market_structure` también se guarda `..._decisions.csv`: cada paso de cada setup (ruptura, toque, señal...)
 y el motivo por el que se descartó, con la regla de la especificación (ST-5, TP-2...).
+Para desglosar un backtest de `market_structure` (salidas por motivo, resultado en R por sesión, hora, día y par,
+y el embudo de setups por par): `uv run python -m backtest.analyze_trades` (el último) o con el nombre del backtest.
 
 **Pruebas en lote.** Lanza la misma configuración en varios timeframes, cada uno con un periodo de práctica
 (de `start` a `split`) y otro de comprobación (de `split` a `end`), y muestra una tabla resumen:
