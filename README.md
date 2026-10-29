@@ -106,6 +106,9 @@ Con `market_structure` también se guarda `..._decisions.csv`: cada paso de cada
 y el motivo por el que se descartó, con la regla de la especificación (ST-5, TP-2...).
 Para desglosar un backtest de `market_structure` (salidas por motivo, resultado en R por sesión, hora, día y par,
 y el embudo de setups por par): `uv run python -m backtest.analyze_trades` (el último) o con el nombre del backtest.
+Las variantes V1–V3 de la sección 16 de la especificación, con sus criterios fijados de antemano:
+`uv run python -m backtest.variants desarrollo` (2020–2023, elige la variante) y después, una sola vez,
+`uv run python -m backtest.variants comprobacion` (2024–2026).
 
 **Pruebas en lote.** Lanza la misma configuración en varios timeframes, cada uno con un periodo de práctica
 (de `start` a `split`) y otro de comprobación (de `split` a `end`), y muestra una tabla resumen:

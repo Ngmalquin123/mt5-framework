@@ -51,7 +51,8 @@ class SignalMarketStructure(ISignalGenerator):
 
         self.props = properties
         self.params = SetupParams(properties.swing_n_h1, properties.swing_n_m15, properties.swing_n_m5, properties.break_margin_points,
-                                  properties.zone_tol_points, properties.retrace_max_m15, properties.confirm_max_m5)
+                                  properties.zone_tol_points, properties.retrace_max_m15, properties.confirm_max_m5,
+                                  properties.break_kinds, properties.confirmation)
         self.warmup_bars = properties.warmup_days * 288
 
         self.machines: Dict[str, SetupMachine] = {}
@@ -129,12 +130,14 @@ class SignalMarketStructure(ISignalGenerator):
             reason = f"EN-2: el precio se ha alejado {abs(tick['bid'] - signal.close) / point:.0f} puntos del cierre de la señal"
 
         if reason is None:
-            # SL-1: detrás del HL de M5 (compras) o del LH más el spread (ventas, que se cierran al Ask)
+            # SL-1: detrás del HL de M5 (compras) o del LH más el spread (ventas, que se cierran al Ask).
+            # V1: detrás del origen de la ruptura M15
             entry = tick['ask'] if is_buy else tick['bid']
+            stop = signal.origin if self.props.stop_mode == "m15_origin" else signal.stop_swing
             if is_buy:
-                sl = round(signal.stop_swing - self.props.sl_buffer_points * point, digits)
+                sl = round(stop - self.props.sl_buffer_points * point, digits)
             else:
-                sl = round(signal.stop_swing + self.props.sl_buffer_points * point + spread_points * point, digits)
+                sl = round(stop + self.props.sl_buffer_points * point + spread_points * point, digits)
             distance_points = round(abs(entry - sl) / point)
             min_points = max(self.props.min_sl_points, 3 * spread_points, info.trade_stops_level)
 

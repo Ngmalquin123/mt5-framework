@@ -83,6 +83,10 @@ sessions = [["Europe/London", "08:00", "12:00"], ["America/New_York", "08:00", "
 intraday_close = "16:00"        # hora de Nueva York: se cierra lo que siga abierto (HO-3)
 friday_entry_end = "12:00"      # hora de Nueva York: los viernes no se abren operaciones desde aquí (HO-3)
 warmup_days = 30                # días de historial M5 que se leen al arrancar
+# Variantes de la sección 16 de la especificación (los valores de aquí son la v1). Se prueban con backtest.variants
+stop_mode = "m5_swing"          # "m5_swing" (SL-1) o "m15_origin" (V1: SL detrás del origen de la ruptura M15)
+break_kinds = "any"             # "any" (ST-2) o "bos" (V2: solo rupturas M15 etiquetadas como BOS)
+confirmation = "m5_sequence"    # "m5_sequence" (ST-7, ST-8) o "m15_close" (V3: cierre M15 más allá de la vela anterior)
 
 # ---------------- Tamaño de las posiciones
 [sizing]

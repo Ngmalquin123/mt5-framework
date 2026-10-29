@@ -3,7 +3,9 @@
 # Las horas son del servidor. 2026-09-14 es lunes y la entrada es el jueves 17 (semana sin desfase horario).
 from datetime import datetime, timedelta, timezone
 import csv
+import json
 import os
+import re
 import pandas as pd
 import pytest
 
@@ -49,8 +51,8 @@ def m5_bars(points: list, spread: int = 10) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def backtest(tmp_path, monkeypatch, data: dict) -> dict:
-    """Backtest completo con estructura.toml y los datos dados ({símbolo: velas M5})."""
+def write_config(tmp_path, data: dict, strategy: dict = None) -> str:
+    """Escribe las velas M5 ({símbolo: velas}) y una copia de estructura.toml que las usa. strategy: parámetros que se cambian."""
     data_dir = tmp_path / "data"
     data_dir.mkdir(exist_ok=True)
     for symbol, bars in data.items():
@@ -60,11 +62,21 @@ def backtest(tmp_path, monkeypatch, data: dict) -> dict:
     text = text.replace('symbols = ["EURUSD", "GBPUSD"]', f"symbols = {list(data)}".replace("'", '"'))
     text = text.replace('start = "2025-01-01"', 'start = "2026-09-14"').replace('end = "2026-10-01"', 'end = "2026-09-19"')
     text = text.replace('data_dir = "backtest/data"', f'data_dir = "{data_dir.as_posix()}"')
+    for key, value in (strategy or {}).items():
+        line = f"{key} = {json.dumps(value)}"
+        text, found = re.subn(rf"^{key} = .*$", line, text, flags=re.M)
+        if not found:
+            text = text.replace("warmup_days = 30", f"warmup_days = 30\n{line}")
     path = tmp_path / "estructura.toml"
     path.write_text(text, encoding="utf-8")
+    return str(path)
 
+
+def backtest(tmp_path, monkeypatch, data: dict, strategy: dict = None) -> dict:
+    """Backtest completo con estructura.toml y los datos dados ({símbolo: velas M5}). strategy: parámetros que se cambian."""
+    path = write_config(tmp_path, data, strategy)
     monkeypatch.chdir(tmp_path)
-    stats = run_backtest(FrameworkConfig(str(path)), results_name="test")
+    stats = run_backtest(FrameworkConfig(path), results_name="test")
     stats["trade_rows"] = []
     if os.path.exists(stats["trades_file"]):           # sin operaciones no se crea el archivo
         with open(stats["trades_file"], encoding="utf-8") as f:
@@ -235,3 +247,86 @@ def test_position_opened_and_closed_in_the_same_bar(tmp_path, monkeypatch):
     assert trade["entry_time"] == "2026-09-17 11:55:00" and trade["exit_reason"] == "SL"
     assert has_reason(stats, "EN-4") and has_reason(stats, "ST-11: posición cerrada en la misma vela")
     assert not has_reason(stats, "EN-3/EN-4")
+
+
+# ---------------- Variantes de la sección 16 de la especificación (cada una cambia una sola regla)
+V1 = {"stop_mode": "m15_origin", "rr": 1.5, "max_sl_points": 600}
+
+
+def test_variant_v1_stop_beyond_the_m15_origin(tmp_path, monkeypatch):
+    # SL = origen 1.1031 − 2 pips = 1.1029: 460 puntos desde 1.1075 y TP a 1.5 × 460 = 1.1144, más allá del máximo de H1 1.1110
+    stats = backtest(tmp_path, monkeypatch, {"EURUSD": m5_bars(waypoints(BULL_H1, BULL_DAY))}, V1)
+    assert stats["trade_rows"] == []
+    assert "TP-2: swing high de H1 en 1.11100 antes del TP 1.11440" in reasons(stats)
+
+
+def test_variant_v1_sell(tmp_path, monkeypatch):
+    # Venta: SL = origen 1.2659 + 2 pips + spread = 1.2662; TP 1.2616 − 1.5 × 460 puntos = 1.2547, más allá del mínimo de H1 1.2580
+    stats = backtest(tmp_path, monkeypatch, {"GBPUSD": m5_bars(waypoints(BEAR_H1, BEAR_DAY))}, V1)
+    assert stats["trade_rows"] == []
+    assert "TP-2: swing low de H1 en 1.25800 antes del TP 1.25470" in reasons(stats)
+
+
+def test_variant_v2_only_bos(tmp_path, monkeypatch):
+    # La ruptura de 1.1062 es una ruptura en rango de M15 (BREAK): con V2 no abre setup. Sí cuenta el BOS de 1.1078
+    stats = backtest(tmp_path, monkeypatch, {"EURUSD": m5_bars(waypoints(BULL_H1, BULL_DAY))}, {"break_kinds": "bos"})
+    assert stats["trade_rows"] == []
+    assert not any("1.10620" in reason for reason in reasons(stats))
+    assert "ST-2: ruptura M15 BOS de 1.10780 (origen 1.10580)" in reasons(stats)
+
+
+def test_variant_v3_m15_confirmation(tmp_path, monkeypatch):
+    # Tras el toque de las 10:55, la vela M15 de las 11:15 cierra en 1.10687 > 1.10623 (máximo de la vela M15 anterior) + margen.
+    # SL detrás del mínimo desde el toque (1.1058 − 2 pips); compra al Ask de la vela siguiente
+    stats = backtest(tmp_path, monkeypatch, {"EURUSD": m5_bars(waypoints(BULL_H1, BULL_DAY))}, {"confirmation": "m15_close"})
+    (trade,) = stats["trade_rows"]
+    assert trade["side"] == "BUY" and trade["entry_time"] == "2026-09-17 11:30:00"
+    assert float(trade["volume"]) == 0.36 and trade["exit_reason"] == "TP"
+    assert "EN-1: BUY a 1.10697, SL 1.10560, TP 1.10971" in reasons(stats)
+    assert not has_reason(stats, "ST-8: cierre 1.10740")      # la secuencia de M5 ya no se usa
+
+
+def test_variant_v3_sell(tmp_path, monkeypatch):
+    stats = backtest(tmp_path, monkeypatch, {"GBPUSD": m5_bars(waypoints(BEAR_H1, BEAR_DAY))}, {"confirmation": "m15_close"})
+    (trade,) = stats["trade_rows"]
+    assert trade["side"] == "SELL" and trade["exit_reason"] == "TP"
+    assert "EN-1: SELL a 1.26213, SL 1.26350, TP 1.25939" in reasons(stats)
+
+
+def test_variant_values_are_checked():
+    from pydantic import ValidationError
+    from signal_generator.properties.signal_generator_properties import MarketStructureProps
+    with pytest.raises(ValidationError):
+        MarketStructureProps(timeframe="5min", stop_mode="m15")
+
+
+def test_variants_development_and_single_check(tmp_path, monkeypatch, capsys):
+    # backtest.variants con la imagen 1 en una semana: V0 y V3 ganan 2R; V1 (TP-2) y V2 (sin BOS) no operan.
+    # V0 es solo la referencia: se elige V3. La comprobación se hace una vez y la segunda devuelve lo guardado
+    import backtest.variants as variants
+    path = write_config(tmp_path, {"EURUSD": m5_bars(waypoints(BULL_H1, BULL_DAY))})
+    monkeypatch.chdir(tmp_path)
+    week = ("2026-09-14", "2026-09-19")
+    monkeypatch.setattr(variants, "PERIODS", {"desarrollo": week, "comprobacion": week})
+    monkeypatch.setattr(variants, "MIN_TRADES_DEV", 1)
+    monkeypatch.setattr(variants, "MIN_TRADES_CHECK", 1)
+    os.makedirs("backtest/results", exist_ok=True)
+
+    assert variants.development(path, "backtest/results") == "V3"
+    rows = json.load(open("backtest/results/variantes_seleccion.json", encoding="utf-8"))["resultados"]
+    assert [(r["variante"], r["ops"], r["R medio"]) for r in rows] == [("V0", 1, 2.0), ("V1", 0, 0.0), ("V2", 0, 0.0), ("V3", 1, 2.0)]
+
+    assert variants.check(path, "backtest/results") is True
+    monkeypatch.setattr(variants, "run_variant", lambda *args: pytest.fail("la comprobación no se puede repetir"))
+    assert variants.check(path, "backtest/results") is True
+    assert "ya se hizo" in capsys.readouterr().out
+
+
+def test_variants_selection_criteria():
+    from backtest.variants import select_variant, passes_check
+    rows = [{"variante": "V0", "ops": 90, "R medio": 0.5}, {"variante": "V1", "ops": 49, "R medio": 0.4},
+            {"variante": "V2", "ops": 60, "R medio": 0.12}, {"variante": "V3", "ops": 80, "R medio": 0.09}]
+    assert select_variant(rows) == "V2"         # V0 no cuenta, V1 tiene pocas operaciones y V3 no llega a +0.10
+    assert select_variant(rows[:2]) is None
+    assert passes_check({"ops": 30, "R medio": 0.10, "PF": 1.10})
+    assert not passes_check({"ops": 30, "R medio": 0.10, "PF": 1.09})

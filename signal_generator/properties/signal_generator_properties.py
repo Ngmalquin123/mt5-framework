@@ -1,7 +1,7 @@
 # QUANTDEMY - https://quantdemy.com - Trading con Python y MetaTrader 5: Crea tu Propio Framework
 
 from pydantic import BaseModel, ConfigDict
-from typing import List, Tuple
+from typing import List, Literal, Tuple
 
 class BaseSignalProps(BaseModel):
     # Un parámetro mal escrito en config.toml (p.ej. "sl_pionts") da error en lugar de ignorarse
@@ -102,6 +102,9 @@ class MarketStructureProps(BaseSignalProps):
         intraday_close (str): New York time at which the open positions are closed (HO-3).
         friday_entry_end (str): New York time from which no trades are opened on Fridays (HO-3).
         warmup_days (int): Days of M5 history read at start to build the structure.
+        stop_mode (str): "m5_swing" (SL-1) or "m15_origin" (variant V1: SL beyond the origin of the M15 break).
+        break_kinds (str): "any" (ST-2) or "bos" (variant V2: only the M15 breaks labeled as BOS).
+        confirmation (str): "m5_sequence" (ST-7, ST-8) or "m15_close" (variant V3: an M15 close beyond the previous M15 bar).
     """
     timeframe: str
     server_timezone: str = "America/New_York+7"
@@ -121,3 +124,7 @@ class MarketStructureProps(BaseSignalProps):
     intraday_close: str = "16:00"
     friday_entry_end: str = "12:00"
     warmup_days: int = 30
+    # Variantes de la sección 16 de la especificación. Los valores por defecto son la v1
+    stop_mode: Literal["m5_swing", "m15_origin"] = "m5_swing"
+    break_kinds: Literal["any", "bos"] = "any"
+    confirmation: Literal["m5_sequence", "m15_close"] = "m5_sequence"
