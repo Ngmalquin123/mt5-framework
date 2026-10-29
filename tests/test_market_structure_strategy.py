@@ -219,7 +219,7 @@ def test_analysis_of_the_backtest(tmp_path, monkeypatch, capsys):
 
     (trade,) = tables["trades"].to_dict("records")
     assert trade["sl"] == 1.1062 and trade["r"] == pytest.approx(2.0)
-    assert (trade["sesión"], trade["hora NY"], trade["día"]) == ("Londres", "04h", "jueves")
+    assert (trade["año"], trade["sesión"], trade["hora NY"], trade["día"]) == (2026, "Londres", "04h", "jueves")
     assert tables["exit_reason"].loc["TP", "ops"] == 1 and tables["exit_reason"].loc["TP", "R total"] == 2.0
     funnel = tables["funnel"].loc["EURUSD"]
     assert (funnel["señales"], funnel["enviadas"], funnel["ejecutadas"]) == (1, 1, 1)

@@ -1,5 +1,5 @@
 # Análisis de un backtest de market_structure a partir de sus dos CSV (operaciones y decisiones):
-#   1) Operaciones por motivo de salida (TP, SL, cierre intradía), por sesión, por hora y día de entrada y por par.
+#   1) Operaciones por motivo de salida (TP, SL, cierre intradía), por año, por sesión, por hora y día de entrada y por par.
 #      El resultado se da también en R (múltiplos del riesgo): R = 1 es ganar lo que se arriesgaba hasta el SL.
 #   2) Embudo de los setups por par: rupturas, toques, señales y en qué regla se paró el resto.
 #
@@ -59,6 +59,7 @@ def prepare(trades: pd.DataFrame, decisions: pd.DataFrame, server_timezone: str,
     trades["entry_seconds"] = trades["entry_time"].map(server_seconds)
     trades["minutes"] = (trades["exit_time"].map(server_seconds) - trades["entry_seconds"]) / 60
     ny = trades["entry_seconds"].map(lambda t: local_time(t, server_timezone, "America/New_York"))
+    trades["año"] = ny.map(lambda t: t.year)
     trades["hora NY"] = ny.map(lambda t: f"{t.hour:02d}h")
     trades["día"] = pd.Categorical(ny.map(lambda t: WEEKDAYS[t.weekday()]), categories=WEEKDAYS, ordered=True)
 
@@ -141,7 +142,7 @@ def analyze(name: str, results_dir: str = "backtest/results", config_path: str =
         if trades["r"].isna().any():
             print(f"\n AVISO: {int(trades['r'].isna().sum())} operaciones sin su línea EN-1: su R queda vacío")
         for title, by in [("Por motivo de salida (FRAMEWORK = cierre intradía de las 16:00 NY)", "exit_reason"),
-                          ("Por sesión de entrada", "sesión"), ("Por hora de entrada (Nueva York)", "hora NY"),
+                          ("Por año", "año"), ("Por sesión de entrada", "sesión"), ("Por hora de entrada (Nueva York)", "hora NY"),
                           ("Por día de entrada", "día"), ("Por par", "symbol"), ("Por dirección", "side")]:
             tables[by] = summary(trades, by)
             if by == "exit_reason":

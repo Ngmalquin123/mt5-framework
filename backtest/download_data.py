@@ -80,9 +80,11 @@ def download(symbols: list, timeframe: str, start: str, end: str, data_dir: str 
         print(f"{symbol}: {len(bars)} velas desde {first_bar:%Y-%m-%d %H:%M} hasta "
               f"{datetime.fromtimestamp(int(bars['time'].iloc[-1]), tz=timezone.utc):%Y-%m-%d %H:%M}")
 
-        # MT5 solo da tantas velas como "Máx. barras en el gráfico" (Herramientas > Opciones > Gráficos)
+        # MT5 solo da las velas que el terminal tiene descargadas, y como mucho "Máx. barras en el gráfico"
         if (first_bar - date_from).days > 3:
-            print(f"  AVISO: {symbol} empieza más tarde de lo pedido: el servidor no tiene historial anterior de {timeframe}")
+            print(f"  AVISO: {symbol} empieza más tarde de lo pedido. Puede que el servidor no tenga más historial de {timeframe}, "
+                  f"o que el terminal no lo haya descargado: sube 'Máx. barras en el gráfico' (Herramientas > Opciones > Gráficos), "
+                  f"abre el gráfico {symbol} {timeframe}, pulsa Inicio hasta que no cargue más y repite la descarga")
 
         info = mt5.symbol_info(symbol)
         with open(os.path.join(data_dir, f"{symbol}.json"), "w", encoding="utf-8") as f:
