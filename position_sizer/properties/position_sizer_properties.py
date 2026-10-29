@@ -23,5 +23,8 @@ class RiskPctSizingProps(BaseSizerProps):
 
     Attributes:
         risk_pct (float): The risk percentage for position sizing.
+        round_down (bool): If True, the volume is rounded down to the volume step (never more risk than risk_pct; if the
+            minimum volume of the broker exceeds it, no trade). If False, to the nearest step (it can risk a bit more).
     """
     risk_pct: float
+    round_down: bool = False

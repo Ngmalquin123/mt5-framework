@@ -6,7 +6,7 @@
 symbols = ["EURUSD", "USDJPY", "GBPUSD"]
 timeframe = "1min"              # 1min, 5min, 15min, 30min, 1h, 4h, 1d...
 magic_number = 12345
-strategy = "rsi"                # Estrategia activa: "rsi", "rsi_trend", "ma_crossover" o "session_breakout"
+strategy = "rsi"                # Estrategia activa: "rsi", "rsi_trend", "ma_crossover", "session_breakout" o "market_structure"
 
 # ---------------- Estrategias
 # SL y TP: en puntos fijos (sl_points / tp_points) o en múltiplos del ATR (sl_atr / tp_atr).
@@ -61,11 +61,34 @@ sl_atr = 0.0
 tp_atr = 0.0
 atr_period = 14
 
+# Estructura de mercado sin indicadores (especificación de la Fase 1): tendencia en H1, ruptura y retroceso en M15,
+# confirmación y entrada en M5. Necesita timeframe = "5min" (construye M15 y H1 a partir de M5).
+# Configuración completa para probarla: estructura.toml. Los IDs (ST-3, SL-2...) son las reglas de la especificación
+[strategies.market_structure]
+server_timezone = "America/New_York+7"   # RoboForex-Pro, comprobado con backtest.check_data (HO-1)
+swing_n_h1 = 3                  # velas a cada lado de un swing (SW-6)
+swing_n_m15 = 3
+swing_n_m5 = 2
+break_margin_points = 5         # el cierre debe pasar el nivel por 0.5 pips (BOS-1)
+zone_tol_points = 30            # zona de retroceso: nivel roto ± 3 pips (ST-3)
+retrace_max_m15 = 16            # velas M15 para tocar la zona (ST-5)
+confirm_max_m5 = 36             # velas M5 para confirmar después del toque (ST-10)
+sl_buffer_points = 20           # SL a 2 pips del HL/LH de M5 (SL-1)
+min_sl_points = 50              # SL entre 5 y 30 pips; también al menos 3 × spread y el stops level (SL-2)
+max_sl_points = 300
+rr = 2.0                        # TP a 2 veces la distancia al SL (TP-1)
+max_entry_slip_points = 20      # la entrada no puede alejarse más de 2 pips del cierre de la señal (EN-2)
+sessions = [["Europe/London", "08:00", "12:00"], ["America/New_York", "08:00", "11:00"]]   # hora local (HO-2)
+intraday_close = "16:00"        # hora de Nueva York: se cierra lo que siga abierto (HO-3)
+friday_entry_end = "12:00"      # hora de Nueva York: los viernes no se abren operaciones desde aquí (HO-3)
+warmup_days = 30                # días de historial M5 que se leen al arrancar
+
 # ---------------- Tamaño de las posiciones
 [sizing]
 method = "fixed"                # "fixed" (volumen fijo), "min" (volumen mínimo) o "risk_pct" (% de riesgo)
 volume = 0.05                   # lotes, para "fixed"
 risk_pct = 0.01                 # para "risk_pct": 0.01 = arriesgar el 1% del equity hasta el SL (necesita SL)
+round_down = false              # true: el volumen se redondea hacia abajo (nunca más riesgo que risk_pct)
 
 # ---------------- Gestión del riesgo
 [risk]
@@ -75,6 +98,7 @@ max_leverage_factor = 5
 [limits]
 max_daily_loss_pct = 0.02       # 2% del balance al empezar el día
 max_open_positions = 3
+max_trades_per_day = 0          # operaciones abiertas por día del servidor (0 = sin límite)
 max_spread_points = 20          # 2 pips en EURUSD
 no_trading_start = "23:45"      # hora del SERVIDOR
 no_trading_end = "01:15"

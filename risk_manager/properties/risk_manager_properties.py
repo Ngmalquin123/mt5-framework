@@ -20,6 +20,7 @@ class TradingLimitsProps(BaseModel):
     Attributes:
         max_daily_loss_pct (float): Max loss of the day as a fraction of the balance at the start of the day (0.02 = 2%).
         max_open_positions (int): Max number of positions opened by the strategy at the same time.
+        max_trades_per_day (int): Max number of positions opened by the strategy in one server day (0 = no limit).
         max_spread_points (int): Max spread (in points) allowed to open a position.
         no_trading_start (str): Start of the period without new trades, server time "HH:MM".
         no_trading_end (str): End of the period without new trades, server time "HH:MM".
@@ -28,6 +29,7 @@ class TradingLimitsProps(BaseModel):
 
     max_daily_loss_pct: float = 0.02
     max_open_positions: int = 3
+    max_trades_per_day: int = 0
     max_spread_points: int = 20
     no_trading_start: str = "23:45"
     no_trading_end: str = "01:15"

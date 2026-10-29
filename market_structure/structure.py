@@ -109,6 +109,31 @@ class StructureTracker():
     def is_broken(self, swing: Swing) -> bool:
         return swing.key in self.broken
 
+    def unbroken_swings(self, kind: str) -> List[Swing]:
+        """
+        Swings of one kind that are confirmed and that no later close has passed (BOS-1), with what is known now.
+        Includes the old ones that are no longer watched for breaks (TP-2: the obstacles of the take profit).
+        """
+        # Máximo (y mínimo) de los cierres desde cada vela hasta la última, recorriendo una sola vez
+        suffix_max, suffix_min = [0.0] * len(self.closes), [0.0] * len(self.closes)
+        high, low = float("-inf"), float("inf")
+        for i in range(len(self.closes) - 1, -1, -1):
+            high, low = max(high, self.closes[i]), min(low, self.closes[i])
+            suffix_max[i], suffix_min[i] = high, low
+
+        result = []
+        for swing in self.swings:
+            if swing.kind != kind:
+                continue
+            after = swing.index + 1
+            if after >= len(self.closes):
+                result.append(swing)
+            elif kind == "high" and suffix_max[after] <= swing.price + self.margin:
+                result.append(swing)
+            elif kind == "low" and suffix_min[after] >= swing.price - self.margin:
+                result.append(swing)
+        return result
+
     # ---------------- Vela nueva
     def update(self, time: int, open_: float, high: float, low: float, close: float) -> list:
         """

@@ -99,7 +99,19 @@ def run_backtest(config: FrameworkConfig, timeframe: str = None, start: str = No
                                            order_executor=ORDER_EXECUTOR,
                                            notification_service=NOTIFICATIONS)
 
-        return Backtester(sim, TRADING_DIRECTOR, TRADE_JOURNAL).run()
+        stats = Backtester(sim, TRADING_DIRECTOR, TRADE_JOURNAL).run()
+
+        # Estrategias que registran sus decisiones (market_structure): resumen y CSV con el motivo de cada paso
+        strategy = SIGNAL_GENERATOR.signal_generator_method
+        if hasattr(strategy, "save_decision_log"):
+            stats["decisions_file"] = strategy.save_decision_log(f"backtest/results/{name}_decisions.csv")
+            stats["decisions"] = strategy.decision_log()
+            for line in strategy.report_lines():
+                print(line)
+            print(f" Decisiones: {stats['decisions_file']}")
+            print("")
+        stats["trades_file"] = TRADE_JOURNAL.file_path
+        return stats
 
     finally:
         sim.deactivate()

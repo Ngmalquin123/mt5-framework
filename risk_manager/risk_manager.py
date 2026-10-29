@@ -150,6 +150,12 @@ class RiskManager(IRiskManager):
 
         return -(realized + floating) / balance_at_day_start
 
+    def _count_trades_today(self, server_timestamp: int) -> int:
+        """Number of positions opened today (server day) by the strategy, open or already closed."""
+        day_start = server_timestamp - server_timestamp % 86400
+        deals = mt5.history_deals_get(day_start, server_timestamp + 60) or ()
+        return sum(1 for deal in deals if deal.magic == self.PORTFOLIO.magic and deal.entry == mt5.DEAL_ENTRY_IN)
+
     def _is_in_no_trading_window(self, server_time: datetime) -> bool:
         """
         Checks if the server time is inside the period without new trades.
@@ -196,21 +202,28 @@ class RiskManager(IRiskManager):
                 print(f"{Utils.dateprint()} - RISK MGMT: La pérdida del día ({daily_loss_pct:.2%}) alcanza el máximo de {self.limits.max_daily_loss_pct:.2%}. No se abren más operaciones hoy")
                 return False
 
-        # 2) Número máximo de posiciones abiertas
+        # 2) Número máximo de operaciones del día
+        if self.limits.max_trades_per_day > 0:
+            trades_today = self._count_trades_today(tick.time)
+            if trades_today >= self.limits.max_trades_per_day:
+                print(f"{Utils.dateprint()} - RISK MGMT: Ya se han abierto {trades_today} operaciones hoy (máx. {self.limits.max_trades_per_day}). Orden descartada en {symbol}")
+                return False
+
+        # 3) Número máximo de posiciones abiertas
         if self.limits.max_open_positions > 0:
             open_positions = len(self.PORTFOLIO.get_strategy_open_positions())
             if open_positions >= self.limits.max_open_positions:
                 print(f"{Utils.dateprint()} - RISK MGMT: Ya hay {open_positions} posiciones abiertas (máx. {self.limits.max_open_positions}). Orden descartada en {symbol}")
                 return False
 
-        # 3) Spread máximo
+        # 4) Spread máximo
         if self.limits.max_spread_points > 0:
             symbol_info = mt5.symbol_info(symbol)
             if symbol_info is not None and symbol_info.spread > self.limits.max_spread_points:
                 print(f"{Utils.dateprint()} - RISK MGMT: Spread de {symbol} de {symbol_info.spread} puntos (máx. {self.limits.max_spread_points}). Orden descartada")
                 return False
 
-        # 4) Horario sin nuevas operaciones (hora del servidor)
+        # 5) Horario sin nuevas operaciones (hora del servidor)
         if self.limits.no_trading_start and self.limits.no_trading_end:
             server_time = datetime.fromtimestamp(tick.time, tz=timezone.utc).replace(tzinfo=None)
             if self._is_in_no_trading_window(server_time):

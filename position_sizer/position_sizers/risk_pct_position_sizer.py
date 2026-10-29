@@ -17,6 +17,7 @@ class RiskPctPositionSizer(IPositionSizer):
             properties (RiskPctSizingProps): An object containing the properties for risk percentage position sizing.
         """
         self.risk_pct = properties.risk_pct
+        self.round_down = properties.round_down
 
     def size_signal(self, signal_event: SignalEvent, data_provider: DataProvider) -> float:
         """
@@ -77,6 +78,12 @@ class RiskPctPositionSizer(IPositionSizer):
         
         # Cálculo del tamaño de la posición
         try:
+            if self.round_down:
+                # Distancia en ticks redondeada (1.1075 - 1.1062 da 129.9999 ticks con decimales binarios). El volumen
+                # se deja sin redondear: el PositionSizer lo redondea hacia abajo y descarta los menores que el mínimo
+                price_distance_in_integer_ticksizes = round(abs(entry_price - signal_event.sl) / tick_size)
+                return equity * self.risk_pct / (price_distance_in_integer_ticksizes * tick_value_account_ccy)
+
             price_distance_in_integer_ticksizes = int(abs(entry_price - signal_event.sl) / tick_size)
             monetary_risk = equity * self.risk_pct
             volume = monetary_risk / (price_distance_in_integer_ticksizes * tick_value_account_ccy)

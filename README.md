@@ -57,7 +57,7 @@ Así lo que pruebas es exactamente lo que se ejecuta.
 
 | Sección | Qué contiene |
 |---|---|
-| `[trading]` | símbolos, timeframe, magic number y estrategia activa (`rsi`, `rsi_trend`, `ma_crossover` o `session_breakout`) |
+| `[trading]` | símbolos, timeframe, magic number y estrategia activa (`rsi`, `rsi_trend`, `ma_crossover`, `session_breakout` o `market_structure`) |
 | `[strategies.*]` | parámetros de cada estrategia y su SL/TP |
 | `[sizing]` | volumen fijo, mínimo o por % de riesgo |
 | `[risk]` / `[limits]` | apalancamiento máximo y límites generales |
@@ -70,6 +70,10 @@ Así lo que pruebas es exactamente lo que se ejecuta.
 - `ma_crossover`: cruce de medias.
 - `session_breakout`: ruptura del rango de la sesión asiática en la apertura de Londres (horas del servidor).
   Como mucho una operación por par y día; cierra a una hora fija.
+- `market_structure`: estructura de mercado sin indicadores. Tendencia en H1 (HH/HL o LH/LL), ruptura y retroceso en M15,
+  confirmación en M5 (HL o LH y cierre más allá del último swing). Sigue las reglas de la especificación de la Fase 1.
+  Usa `timeframe = "5min"` y construye M15 y H1 a partir de M5. Configuración completa en `estructura.toml`.
+  En fase de pruebas: solo backtest, todavía sin filtro de noticias, y se niega a operar en una cuenta real.
 
 **SL/TP por ATR.** Con `sl_atr = 1.5` y `tp_atr = 3.0`, los stops se ponen a 1.5 y 3 veces el
 rango medio de las velas. Se adaptan solos al timeframe, al símbolo y a la volatilidad.
@@ -95,8 +99,11 @@ uv run python -m backtest.download_data --symbols EURUSD USDJPY GBPUSD --timefra
 # 2) Ejecutar
 uv run backtest_app.py
 uv run backtest_app.py pruebas.toml      # otra configuración, sin tocar la del real
+uv run backtest_app.py estructura.toml   # estrategia market_structure (necesita datos de 5min)
 ```
 El informe se muestra al terminar. Las operaciones y la curva de equity se guardan en `backtest/results/`.
+Con `market_structure` también se guarda `..._decisions.csv`: cada paso de cada setup (ruptura, toque, señal...)
+y el motivo por el que se descartó, con la regla de la especificación (ST-5, TP-2...).
 
 **Pruebas en lote.** Lanza la misma configuración en varios timeframes, cada uno con un periodo de práctica
 (de `start` a `split`) y otro de comprobación (de `split` a `end`), y muestra una tabla resumen:

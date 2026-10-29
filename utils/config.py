@@ -2,7 +2,7 @@
 # No importa MetaTrader5, así backtest_app.py puede leer la configuración antes de activar el MT5 simulado.
 
 from signal_generator.properties.signal_generator_properties import (BaseSignalProps, MACrossoverProps, RSIProps, RSITrendProps,
-                                                                     SessionBreakoutProps)
+                                                                     SessionBreakoutProps, MarketStructureProps)
 from position_sizer.properties.position_sizer_properties import BaseSizerProps, MinSizingProps, FixedSizingProps, RiskPctSizingProps
 from risk_manager.properties.risk_manager_properties import MaxLeverageFactorRiskProps, TradingLimitsProps
 import tomllib
@@ -11,7 +11,7 @@ import tomllib
 class FrameworkConfig():
 
     STRATEGIES = {"rsi": RSIProps, "rsi_trend": RSITrendProps, "ma_crossover": MACrossoverProps,
-                  "session_breakout": SessionBreakoutProps}
+                  "session_breakout": SessionBreakoutProps, "market_structure": MarketStructureProps}
 
     def __init__(self, path: str = "config.toml"):
         """
@@ -67,7 +67,7 @@ class FrameworkConfig():
         elif method == "min":
             return MinSizingProps()
         elif method == "risk_pct":
-            return RiskPctSizingProps(risk_pct=sizing["risk_pct"])
+            return RiskPctSizingProps(risk_pct=sizing["risk_pct"], round_down=sizing.get("round_down", False))
         else:
             raise ValueError(f"Método de sizing '{method}' no válido en {self.path}. Opciones: fixed, min, risk_pct")
 

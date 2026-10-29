@@ -1,0 +1,123 @@
+# Estrategia de estructura de mercado (Fase 3): configuración de la especificación de la Fase 1.
+# De momento SOLO para el backtest:  uv run backtest_app.py estructura.toml
+# No la uses con trading_app.py hasta la Fase 4 (modo PAPER y filtro de noticias). En una cuenta real se niega a operar.
+# Las credenciales NO van aquí: van en el .env
+
+[trading]
+symbols = ["EURUSD", "GBPUSD"]          # el orden importa: con dos señales a la vez gana el primero (RG-2)
+timeframe = "5min"              # market_structure necesita 5min
+magic_number = 12345
+strategy = "market_structure"   # Estrategia activa: "rsi", "rsi_trend", "ma_crossover", "session_breakout" o "market_structure"
+
+# ---------------- Estrategias
+# SL y TP: en puntos fijos (sl_points / tp_points) o en múltiplos del ATR (sl_atr / tp_atr).
+# Si sl_atr o tp_atr es mayor que 0 se usa el ATR y se ignoran los puntos: así los stops se adaptan
+# solos al timeframe, al símbolo y a la volatilidad. Un 0 desactiva el SL o el TP.
+
+[strategies.rsi]
+rsi_period = 5
+rsi_upper = 70.0
+rsi_lower = 30.0
+sl_points = 50                  # 10 puntos = 1 pip en EURUSD
+tp_points = 100
+sl_atr = 0.0                    # p.ej. 1.5 -> SL a 1.5 veces el ATR
+tp_atr = 0.0                    # p.ej. 3.0 -> TP a 3 veces el ATR
+atr_period = 14                 # velas para calcular el ATR
+
+# RSI con filtro de tendencia: solo compra si el precio está por encima de la media de trend_period velas
+# (compra los retrocesos de una subida) y solo vende si está por debajo
+[strategies.rsi_trend]
+rsi_period = 14
+rsi_upper = 70.0
+rsi_lower = 30.0
+trend_period = 200
+sl_points = 0
+tp_points = 0
+sl_atr = 2.0
+tp_atr = 4.0
+atr_period = 14
+
+[strategies.ma_crossover]
+fast_period = 5
+slow_period = 10
+sl_points = 0
+tp_points = 0
+sl_atr = 0.0
+tp_atr = 0.0
+atr_period = 14
+
+# Ruptura de sesión: rango de la sesión asiática y su ruptura en la apertura de Londres.
+# Horas del SERVIDOR (RoboForex: las 10:00 del servidor son la apertura de Londres todo el año).
+# Como mucho una operación por símbolo y día. Timeframes intradía (de 1min a 4h)
+[strategies.session_breakout]
+range_start = "02:00"           # inicio del rango
+range_end = "10:00"             # fin del rango: desde aquí se buscan rupturas
+entry_end = "14:00"             # a partir de aquí no se abren operaciones nuevas
+close_time = "22:00"            # se cierra lo que siga abierto ("" = no cerrar)
+sl_at_range = true              # SL en el lado contrario del rango (false = usar sl_points / sl_atr)
+tp_range_mult = 1.0             # TP a 1 altura del rango desde la entrada (0 = usar tp_points / tp_atr)
+sl_points = 0
+tp_points = 0
+sl_atr = 0.0
+tp_atr = 0.0
+atr_period = 14
+
+# Estructura de mercado sin indicadores (especificación de la Fase 1): tendencia en H1, ruptura y retroceso en M15,
+# confirmación y entrada en M5. Necesita timeframe = "5min" (construye M15 y H1 a partir de M5).
+# Configuración completa para probarla: estructura.toml. Los IDs (ST-3, SL-2...) son las reglas de la especificación
+[strategies.market_structure]
+server_timezone = "America/New_York+7"   # RoboForex-Pro, comprobado con backtest.check_data (HO-1)
+swing_n_h1 = 3                  # velas a cada lado de un swing (SW-6)
+swing_n_m15 = 3
+swing_n_m5 = 2
+break_margin_points = 5         # el cierre debe pasar el nivel por 0.5 pips (BOS-1)
+zone_tol_points = 30            # zona de retroceso: nivel roto ± 3 pips (ST-3)
+retrace_max_m15 = 16            # velas M15 para tocar la zona (ST-5)
+confirm_max_m5 = 36             # velas M5 para confirmar después del toque (ST-10)
+sl_buffer_points = 20           # SL a 2 pips del HL/LH de M5 (SL-1)
+min_sl_points = 50              # SL entre 5 y 30 pips; también al menos 3 × spread y el stops level (SL-2)
+max_sl_points = 300
+rr = 2.0                        # TP a 2 veces la distancia al SL (TP-1)
+max_entry_slip_points = 20      # la entrada no puede alejarse más de 2 pips del cierre de la señal (EN-2)
+sessions = [["Europe/London", "08:00", "12:00"], ["America/New_York", "08:00", "11:00"]]   # hora local (HO-2)
+intraday_close = "16:00"        # hora de Nueva York: se cierra lo que siga abierto (HO-3)
+friday_entry_end = "12:00"      # hora de Nueva York: los viernes no se abren operaciones desde aquí (HO-3)
+warmup_days = 30                # días de historial M5 que se leen al arrancar
+
+# ---------------- Tamaño de las posiciones
+[sizing]
+method = "risk_pct"             # "fixed" (volumen fijo), "min" (volumen mínimo) o "risk_pct" (% de riesgo)
+volume = 0.05                   # lotes, para "fixed"
+risk_pct = 0.005                # 0.5 % del equity por operación (RG-1)
+round_down = true               # true: el volumen se redondea hacia abajo (nunca más riesgo que risk_pct)
+
+# ---------------- Gestión del riesgo
+[risk]
+max_leverage_factor = 20        # con un SL de 5 pips y 0.5 % de riesgo la posición es de 1 lote (unas 11 veces la cuenta)
+
+# Límites generales antes de cada orden. Un 0 (o "" en las horas) desactiva el límite
+[limits]
+max_daily_loss_pct = 0.02       # 2% del balance al empezar el día
+max_open_positions = 1          # una posición en total, sumando todos los pares (RG-2)
+max_trades_per_day = 3          # RG-3
+max_spread_points = 20          # 2 pips
+no_trading_start = ""           # sin uso: las ventanas de entrada son las de [strategies.market_structure]
+no_trading_end = ""
+
+# ---------------- Órdenes y registro
+[orders]
+pending_order_max_age_minutes = 60      # 0 = las pendientes no caducan
+
+[journal]
+file = "logs/trades.csv"
+
+# ---------------- Backtest (solo lo usa backtest_app.py)
+[backtest]
+start = "2025-01-01"
+end = "2026-10-01"
+split = "2026-01-01"            # pruebas en lote: práctica de start a split y comprobación de split a end
+data_dir = "backtest/data"
+initial_balance = 10000.0
+account_currency = "USD"
+commission_per_lot = 0.0        # comisión por lote y por lado (entrada y salida), en la divisa de la cuenta
+spread_points = 0               # 0 = el spread real de cada vela. Otro valor = spread fijo en puntos
